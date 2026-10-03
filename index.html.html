@@ -1,0 +1,437 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#18212b">
+<link rel="manifest" href="manifest.json">
+<title>Alkawn Hub — Attendance</title>
+<style>
+:root{--bg:#f4f6f8;--card:#fff;--text:#18212b;--muted:#66717d;--line:#dfe4e8;--accent:#315f78;--good:#18794e;--bad:#b42318;--warn:#9a6700;--shadow:0 2px 12px #0000000d}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text)}
+button,input,select,textarea{font:inherit}button{cursor:pointer}.app{min-height:100vh}
+header{position:sticky;top:0;z-index:5;background:var(--text);color:#fff;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand{font-weight:800;font-size:19px}.brand small{display:block;font-size:11px;font-weight:500;opacity:.7}
+.header-actions{display:flex;gap:7px;flex-wrap:wrap}header button{background:#ffffff16;color:#fff;border:1px solid #ffffff30;border-radius:8px;padding:8px 11px}
+main{max-width:1050px;margin:auto;padding:18px}.nav{display:flex;gap:7px;overflow:auto;margin-bottom:18px}.nav button{border:1px solid var(--line);background:var(--card);padding:10px 14px;border-radius:9px;white-space:nowrap}.nav button.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.view{display:none}.view.active{display:block}.grid{display:grid;gap:14px}.grid.two{grid-template-columns:repeat(2,minmax(0,1fr))}.grid.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;box-shadow:var(--shadow)}h1{font-size:24px;margin:0 0 5px}h2{font-size:18px;margin:0 0 12px}h3{font-size:15px;margin:0 0 7px}.muted{color:var(--muted)}.small{font-size:13px}
+label{display:block;font-size:13px;font-weight:650;margin:10px 0 5px}input,select,textarea{width:100%;padding:10px;border:1px solid #cbd2d8;border-radius:8px;background:#fff;color:var(--text)}textarea{min-height:80px;resize:vertical}
+.row{display:flex;gap:9px;align-items:center;justify-content:space-between;flex-wrap:wrap}.actions{display:flex;gap:8px;flex-wrap:wrap}.btn{border:1px solid #cbd2d8;background:#fff;color:var(--text);padding:9px 12px;border-radius:8px}.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}.btn.good{background:var(--good);border-color:var(--good);color:#fff}.btn.danger{background:#fff;border-color:#e6aaa5;color:var(--bad)}.btn:disabled{opacity:.5;cursor:not-allowed}
+.stat{font-size:28px;font-weight:800}.stat-label{font-size:12px;color:var(--muted)}
+.list{display:flex;flex-direction:column;gap:8px}.list-item{border:1px solid var(--line);border-radius:9px;padding:12px;background:#fff}.list-item.clickable{cursor:pointer}.list-item.clickable:hover{border-color:#aeb8c1}.class-student-search{margin-bottom:8px}.class-student-row{display:flex;gap:10px;align-items:center;font-weight:500;margin:0;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:#fff}.class-student-row input.classStudent{width:auto;flex:0 0 auto;margin:0}.class-student-list{display:flex;flex-direction:column;gap:6px;max-height:230px;overflow:auto}.taxonomy-list{display:flex;flex-direction:column;gap:10px}.taxonomy-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:8px}.taxonomy-row .tag-list{display:flex;gap:5px;flex-wrap:wrap}.class-filter-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}.class-filter-row>*{flex:1 1 150px}.class-label-check{display:flex;gap:8px;align-items:center;margin:0;padding:8px 10px;border:1px solid var(--line);border-radius:8px}.class-label-check input{width:auto}.day-checks{display:flex;flex-wrap:wrap;gap:7px;margin-top:5px}.day-check{display:flex;align-items:center;gap:7px;margin:0;padding:9px 12px;border:1px solid var(--line);border-radius:8px;background:#fff;font-weight:500}.day-check input{width:auto;margin:0}
+.tag-chip{display:inline-flex;align-items:center;border-radius:999px;padding:4px 9px;font-size:12px;font-weight:700;border:1px solid}.label-dropdown{position:relative}.label-dropdown-toggle{width:100%;display:flex;align-items:center;justify-content:space-between;text-align:left}.label-dropdown-menu{position:absolute;left:0;right:0;top:calc(100% + 5px);z-index:30;background:#fff;border:1px solid var(--line);border-radius:9px;padding:7px;box-shadow:0 8px 25px #0002;max-height:220px;overflow:auto}.label-dropdown-menu label{display:flex;align-items:center;gap:8px;margin:0;padding:8px;border-radius:7px;font-weight:500}.label-dropdown-menu label:hover{background:#f4f6f8}.label-dropdown-menu input{width:auto}.label-dropdown.disabled{opacity:.6}.badge{display:inline-flex;align-items:center;border-radius:999px;padding:3px 8px;font-size:12px;font-weight:700}.present{background:#e5f6ed;color:var(--good)}.absent{background:#fdebea;color:var(--bad)}.pending{background:#fff4d6;color:var(--warn)}.inactive{background:#edf0f2;color:#66717d}
+.att-summary{position:sticky;top:80px;z-index:10;background:#fff;box-shadow:0 2px 8px #0001}.student-stats .card{padding:10px}.student-stats .stat{font-size:23px}.student-month-nav{justify-content:center;margin:10px 0 16px}.student-month-nav .month-input{max-width:180px}.att-summary .row{gap:12px}.att-summary-actions{display:flex;align-items:center;gap:14px;flex-wrap:wrap}.summary-count{font-weight:750}.attendance-counts{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;width:100%}.attendance-counts>div{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;line-height:1.05;min-width:82px;padding:7px 12px;border:1px solid var(--line);border-radius:10px;background:#fff}.attendance-counts b{font-size:20px}.attendance-counts span:not(.badge){font-size:12px;color:var(--muted);margin-top:3px}.att-row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;border:1px solid var(--line);border-radius:10px;padding:12px;background:#fff}.att-main{min-width:0}.att-name{font-weight:750}.att-meta{font-size:12px;color:var(--muted)}.att-buttons{display:flex;gap:6px}.att-buttons button{min-width:78px;padding:10px 8px;border-radius:8px;border:1px solid #ccd3d9;background:#fff}.att-buttons button:disabled{opacity:.45;cursor:not-allowed}.month-nav{display:flex;gap:8px;align-items:center}.month-nav .month-input{max-width:180px}.att-buttons .selected-present{background:#e5f6ed;border-color:#7bc79e;color:var(--good);font-weight:800}.att-buttons .selected-absent{background:#fdebea;border-color:#e39b95;color:var(--bad);font-weight:800}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:9px;border-bottom:1px solid var(--line);font-size:14px}th{color:var(--muted);font-size:12px}.empty{text-align:center;padding:28px;color:var(--muted)}
+dialog{border:0;border-radius:13px;padding:0;width:min(560px,calc(100% - 24px));box-shadow:0 15px 50px #0005}dialog::backdrop{background:#0006}.modal{padding:18px}.modal h2{margin-bottom:3px}.toast{position:fixed;right:16px;bottom:16px;background:var(--text);color:#fff;padding:11px 14px;border-radius:9px;box-shadow:0 6px 20px #0003;display:none;z-index:20}.toast.show{display:block}
+@media(max-width:700px){main{padding:12px}.grid.two,.grid.three{grid-template-columns:1fr}.att-row{grid-template-columns:1fr}.att-buttons button{flex:1}.att-buttons{width:100%}header{align-items:flex-start}.header-actions{justify-content:flex-end}}
+</style>
+</head>
+<body>
+<div class="app">
+<header>
+  <div class="brand">Alkawn Hub <small>Attendance</small></div>
+  <div class="header-actions">
+    <button onclick="exportData()">Backup</button>
+    <button onclick="document.getElementById('importFile').click()">Restore</button>
+    <input id="importFile" type="file" accept=".json" hidden onchange="importData(event)">
+  </div>
+</header>
+<main>
+  <nav class="nav">
+    <button data-view="attendance" class="active">Attendance</button>
+    <button data-view="students">Students</button>
+    <button data-view="programs">Programs & Labels</button>
+    <button data-view="classes">Classes</button>
+    <button data-view="history">History</button>
+  </nav>
+
+  <section id="attendance" class="view active">
+    <div class="row" style="margin-bottom:14px">
+      <div><h1>Take Attendance</h1><div class="muted">Choose a class and date, then mark each student.</div></div>
+      <button class="btn primary" onclick="openQuickSession()">Open Today</button>
+    </div>
+    <div class="card">
+      <div class="grid two">
+        <div><label>Date</label><input id="attDate" type="date" onchange="attendanceDateChanged()"></div>
+        <div><label>Class</label><select id="attClass" onchange="renderAttendance()"></select></div>
+      </div>
+      <div id="attDateNote" class="small muted" style="margin-top:8px"></div>
+    </div>
+    <div id="attendanceArea" style="margin-top:14px"></div>
+  </section>
+
+  <section id="students" class="view">
+    <div class="row" style="margin-bottom:14px"><div><h1>Students</h1><div class="muted">Students are organized by Program and that program's Labels.</div></div><div class="actions"><button class="btn primary" onclick="openStudent()">+ Student</button></div></div>
+    <div class="card">
+      <div class="grid three">
+        <div><label>Search</label><input id="studentSearch" placeholder="Search students..." oninput="renderStudents()"></div>
+        <div><label>Program</label><select id="studentProgramFilter" onchange="studentProgramFilterChanged()"></select></div>
+        <div><label>Label</label><select id="studentLabelFilter" onchange="renderStudents()"></select></div>
+      </div>
+    </div>
+    <div id="studentsArea" class="list" style="margin-top:14px"></div>
+  </section>
+
+  <section id="programs" class="view">
+    <div class="row" style="margin-bottom:14px"><div><h1>Programs & Labels</h1><div class="muted">Create the programs and reusable labels you use to organize students.</div></div></div>
+    <div class="card">
+      <div class="row"><div><h2>Programs</h2><div class="small muted">Each program has its own labels. A student can belong to one program and have multiple labels from that program.</div></div><button class="btn primary" onclick="addProgram()">+ Program</button></div>
+      <div id="programsArea" class="taxonomy-list" style="margin-top:12px"></div>
+    </div>
+  </section>
+
+  <section id="classes" class="view">
+    <div class="row" style="margin-bottom:14px"><div><h1>Classes</h1><div class="muted">Recurring classes and their default student lists.</div></div><button class="btn primary" onclick="openClass()">+ Class</button></div>
+    <div id="classesArea" class="list"></div>
+  </section>
+
+  <section id="history" class="view">
+    <div class="row" style="margin-bottom:14px"><div><h1>Attendance History</h1><div class="muted">Review attendance by student, class or date.</div></div></div>
+    <div class="card">
+      <div class="grid three">
+        <div><label>Class</label><select id="histClass" onchange="historyClassChanged()"></select></div>
+        <div><label>Month</label><input id="histMonth" type="month" onchange="historyMonthChanged()"></div>
+        <div><label>Session date</label><select id="histDate" onchange="renderHistory()"></select></div>
+      </div>
+    </div>
+    <div id="historyArea" style="margin-top:14px"></div>
+  </section>
+</main>
+</div>
+
+<dialog id="modal"><div class="modal" id="modalBody"></div></dialog>
+<div id="toast" class="toast"></div>
+
+<script>
+const KEY="alkawnAttendanceV1";
+let db=load();
+const $=id=>document.getElementById(id);
+const uid=()=>crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36)+Math.random().toString(36).slice(2);
+function load(){try{return JSON.parse(localStorage.getItem(KEY))||{students:[],classes:[],attendance:[]}}catch{return {students:[],classes:[],attendance:[]}}}
+function save(){localStorage.setItem(KEY,JSON.stringify(db))}
+function migrateData(){
+ db.students=Array.isArray(db.students)?db.students:[];db.classes=Array.isArray(db.classes)?db.classes:[];db.attendance=Array.isArray(db.attendance)?db.attendance:[];
+ db.programs=Array.isArray(db.programs)?db.programs:[];
+ db.students.forEach(s=>{if(!Array.isArray(s.labelIds))s.labelIds=[];if(s.programId===undefined)s.programId="";delete s.subcategory});
+ db.classes.forEach(c=>{if(!Array.isArray(c.days))c.days=c.day?[c.day]:[];if(c.day===undefined)c.day=c.days[0]||"";if(c.programId===undefined)c.programId="";if(c.listMode===undefined)c.listMode="manual";if(c.defaultLabelId===undefined)c.defaultLabelId=""});
+ const resetKey="alkawnTaxonomyResetV11";
+ if(!localStorage.getItem(resetKey)){
+   db.programs=[];
+   db.students.forEach(s=>{s.programId="";s.labelIds=[];delete s.subcategory});
+   db.classes.forEach(c=>{c.programId="";c.defaultLabelId="";if(c.listMode==="label")c.listMode="manual"});
+   localStorage.setItem(resetKey,"1");
+ }
+ db.programs.forEach((p,pi)=>{if(!Array.isArray(p.labels))p.labels=[];if(p.colorIndex===undefined)p.colorIndex=pi%10;p.labels.forEach((l,li)=>{if(l.colorIndex===undefined)l.colorIndex=li%10})});
+ delete db.labels;
+ save();
+}
+migrateData();
+function today(){return new Date().toISOString().slice(0,10)}
+function programById(id){return db.programs.find(p=>p.id===id)}
+function labelById(id){for(const p of db.programs){const l=(p.labels||[]).find(x=>x.id===id);if(l)return l}return null}
+function labelsForProgram(programId){return programById(programId)?.labels||[]}
+const programColors=[
+  ["#e0f2fe","#075985"],["#dcfce7","#166534"],["#ede9fe","#5b21b6"],["#fce7f3","#9d174d"],["#fef3c7","#92400e"],
+  ["#ccfbf1","#115e59"],["#dbeafe","#1e40af"],["#f3e8ff","#7e22ce"],["#ffedd5","#9a3412"],["#e2e8f0","#334155"]
+];
+const labelColors=[
+  ["#f1f5f9","#475569"],["#ecfccb","#3f6212"],["#cffafe","#155e75"],["#fae8ff","#86198f"],["#fef9c3","#854d0e"],
+  ["#ffe4e6","#9f1239"],["#d1fae5","#065f46"],["#e0e7ff","#3730a3"],["#ffedd5","#7c2d12"],["#f0fdf4","#166534"]
+];
+function tagStyle(kind,index){let c=(kind==='program'?programColors:labelColors)[Number(index||0)%10];return `background:${c[0]};color:${c[1]};border-color:${c[0]}`;}
+function nextColorIndex(items){return items.length?((Math.max(...items.map(x=>Number(x.colorIndex??0)))+1)%10):0}
+function studentLabels(s){return (s.labelIds||[]).map(labelById).filter(Boolean)}
+function populateProgramSelect(id,selected="",includeAll=false){let el=$(id);if(!el)return;el.innerHTML=(includeAll?'<option value="">All programs</option>':'<option value="">Select program</option>')+db.programs.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join("");el.value=selected||""}
+function populateLabelSelect(id,selected="",includeAll=false,programId=""){let el=$(id);if(!el)return;let labels=labelsForProgram(programId);let disabled=!programId;el.disabled=disabled;el.innerHTML=(disabled?'<option value="">Select program first</option>':(includeAll?'<option value="">All labels</option>':'<option value="">Select label</option>'))+(!disabled?labels.map(l=>`<option value="${l.id}">${esc(l.name)}</option>`).join(""):"");el.value=disabled?"":(selected||"")}
+
+function fmt(d){return new Date(d+"T12:00:00").toLocaleDateString(undefined,{day:"numeric",month:"short",year:"numeric"})}
+function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]))}
+function toast(t){let x=$("toast");x.textContent=t;x.classList.add("show");setTimeout(()=>x.classList.remove("show"),1800)}
+function openModal(html){$("modalBody").innerHTML=html;$("modal").showModal()}
+function closeModal(){$("modal").close()}
+$("modal").addEventListener("click",e=>{if(e.target===$("modal"))closeModal()})
+
+document.querySelectorAll(".nav button").forEach(b=>b.onclick=()=>showView(b.dataset.view));
+function showView(v){document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));$(v).classList.add("active");document.querySelectorAll(".nav button").forEach(x=>x.classList.toggle("active",x.dataset.view===v));refresh(v)}
+
+function refresh(v){if(v==="attendance"){populateSelectors();renderAttendance()}if(v==="students"){populateStudentFilters();renderStudents()}if(v==="programs")renderProgramsLabels();if(v==="classes")renderClasses();if(v==="history"){populateHistorySelectors();renderHistory()}}
+function weekdayForDate(date){return new Date(date+"T12:00:00").toLocaleDateString(undefined,{weekday:"long"})}
+function scheduledClassesForDate(date){
+ let day=weekdayForDate(date);
+ return db.classes.filter(c=>Array.isArray(c.days)?c.days.includes(day):c.day===day);
+}
+function classHasRecordForDate(c,date){
+ return !!db.attendance.find(r=>r.date===date&&(r.classId===c.id||r.className===c.name));
+}
+function populateSelectors(){
+ let date=$("attDate").value||today();
+ let c=$("attClass"),old=c.value,classes=scheduledClassesForDate(date);
+ c.innerHTML=classes.length?classes.map(x=>`<option value="${x.id}">${esc(x.name)}${x.time?" — "+esc(x.time):""}</option>`).join(""):`<option value="">No class scheduled for this day</option>`;
+ if(old&&classes.some(x=>x.id===old))c.value=old;else if(classes[0])c.value=classes[0].id;else c.value="";
+ let when=date>today()?"future":date===today()?"today":"past";
+ $("attDateNote").textContent=classes.length?`Classes for ${weekdayForDate(date)}.`:`No recurring classes are scheduled for ${weekdayForDate(date)}.`;
+}
+function attendanceDateChanged(){populateSelectors();renderAttendance()}
+function openQuickSession(){showView("attendance");$("attDate").value=today();populateSelectors();renderAttendance()}
+function sessionKey(classId,date){return classId+"|"+date}
+function getRecord(classId,date){return db.attendance.find(x=>x.classId===classId&&x.date===date)}
+function ensureRecord(classId,date){
+ let c=db.classes.find(x=>x.id===classId);if(!c)return null;
+ let r=getRecord(classId,date);
+ if(!r){
+   r={id:uid(),classId,date,className:c.name,status:date>today()?"planned":"open",cancelled:false,cancelReason:"",records:c.studentIds.map(studentId=>({studentId,status:null,reason:"",temporary:false}))};
+   db.attendance.push(r);save();
+   return r;
+ }
+ // If the recurring class gained regular students after this session was first opened,
+ // add those students to this session without disturbing existing attendance or temporary students.
+ let changed=false;
+ c.studentIds.forEach(studentId=>{
+   if(!r.records.some(a=>a.studentId===studentId)){
+     r.records.push({studentId,status:null,reason:"",temporary:false});
+     changed=true;
+   }
+ });
+ if(r.className!==c.name){r.className=c.name;changed=true}
+ if(changed)save();
+ return r;
+}
+function renderAttendance(){
+ let date=$("attDate").value||today();
+ let c=db.classes.find(x=>x.id===$("attClass").value);
+ if(!c||!scheduledClassesForDate(date).some(x=>x.id===c.id)){
+   $("attendanceArea").innerHTML=`<div class="card empty">Choose a date and select a class scheduled for that day.</div>`;
+   return;
+ }
+ let r=ensureRecord(c.id,date), future=date>today();
+ let present=r.records.filter(x=>x.status==="present").length, absent=r.records.filter(x=>x.status==="absent").length;
+ let cancelled=!!r.cancelled;
+ let summaryLeft=cancelled?`<span class="badge absent">Cancelled</span>`:future?`<span class="badge pending">Future lesson — attendance cannot be marked yet.</span>`:`<div class="attendance-counts"><div><b>${present}</b><span>Present</span></div><div><b>${absent}</b><span>Absent</span></div><div><b>${r.records.length-present-absent}</b><span>Not marked</span></div>${r.status==="completed"?`<span class="badge present">Attendance marked</span>`:""}</div>`;
+ let actionButtons=cancelled?`<button class="btn" onclick="confirmCancelSession('${c.id}','${date}',true)">Reopen Lesson</button>`:`<button class="btn" onclick="addTemporary('${c.id}','${date}')">+ Temporary student</button>${future?"":`<button class="btn ${r.status==="completed"?"good":"primary"}" onclick="toggleComplete('${r.id}')">${r.status==="completed"?"Completed — Reopen":"Complete Attendance"}</button>`}<button class="btn danger" onclick="confirmCancelSession('${c.id}','${date}',false)">Cancel Lesson</button>`;
+ $("attendanceArea").innerHTML=`
+ <div class="card att-summary">
+   <div class="row"><div class="att-summary-actions">${summaryLeft}</div><div class="actions">${actionButtons}</div></div>
+   ${cancelled&&r.cancelReason?`<div class="small muted" style="margin-top:8px">Reason: ${esc(r.cancelReason)}</div>`:""}
+ </div>
+ ${cancelled?`<div class="card empty" style="margin-top:12px">This lesson is cancelled. No attendance can be marked.</div>`:`<div class="list" style="margin-top:12px">${r.records.map(a=>attendanceRow(a,c.id,date,future)).join("")}</div>`}`;
+}
+function attendanceRow(a,classId,date,future=false){
+ let s=db.students.find(x=>x.id===a.studentId);
+ let name=s?esc(s.name):esc(a.name||"Temporary student");
+ let disabled=(future||db.attendance.find(r=>r.classId===classId&&r.date===date)?.status==="completed")?"disabled":"";
+ return `<div class="att-row">
+ <div class="att-main"><div class="att-name">${name} ${a.temporary?'<span class="badge pending">Temporary</span>':""}</div><div class="att-meta">${a.status==="absent"&&a.reason?esc(a.reason):a.status?esc(a.status):future?"Future lesson":"Not marked"}</div></div>
+ <div class="att-buttons">
+ <button ${disabled} class="${a.status==="present"?"selected-present":""}" onclick="setAttendance('${classId}','${date}','${a.studentId||""}','present')">Present</button>
+ <button ${disabled} class="${a.status==="absent"?"selected-absent":""}" onclick="setAttendance('${classId}','${date}','${a.studentId||""}','absent')">Absent</button>
+ ${!future&&a.status==="absent"?`<button onclick="editReason('${classId}','${date}','${a.studentId||""}')">Reason</button>`:""}
+ ${a.temporary?`<button onclick="confirmRemoveTemporary('${classId}','${date}','${a.studentId}')">Remove</button>`:""}
+ </div></div>`
+}
+function setAttendance(classId,date,studentId,status){
+ if(date>today())return;
+ let r=getRecord(classId,date),a=r.records.find(x=>x.studentId===studentId);
+ if(!a||r.cancelled)return;a.status=status;if(status==="present")a.reason="";
+ save();renderAttendance();toast("Saved")
+}
+function toggleComplete(id){let r=db.attendance.find(x=>x.id===id);if(!r||r.date>today()||r.cancelled)return;r.status=r.status==="completed"?"open":"completed";save();renderAttendance();toast(r.status==="completed"?"Attendance completed":"Reopened")}
+function confirmCancelSession(classId,date,reopen=false){
+ let r=getRecord(classId,date),c=db.classes.find(x=>x.id===classId);if(!r||!c)return;
+ if(reopen){openModal(`<h2>Reopen lesson?</h2><div class="muted">This will make the lesson available again.</div><div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Keep Cancelled</button><button class="btn primary" onclick="reopenSession('${classId}','${date}')">Reopen</button></div>`);return}
+ openModal(`<h2>Cancel lesson?</h2><div class="muted">${esc(c.name)} on ${fmt(date)} will be marked as cancelled. Attendance will not be recorded for this lesson.</div><label>Reason</label><textarea id="cancelReason" placeholder="Optional reason"></textarea><div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Keep Lesson</button><button class="btn danger" onclick="cancelSession('${classId}','${date}')">Cancel Lesson</button></div>`)
+}
+function cancelSession(classId,date){let r=getRecord(classId,date);if(!r)return;r.cancelled=true;r.cancelReason=$("cancelReason").value.trim();r.status="cancelled";save();closeModal();renderAttendance();toast("Lesson cancelled")}
+function reopenSession(classId,date){let r=getRecord(classId,date);if(!r)return;r.cancelled=false;r.cancelReason="";r.status=date>today()?"planned":"open";save();closeModal();renderAttendance();toast("Lesson reopened")}
+function confirmRemoveTemporary(classId,date,studentId){
+ let r=getRecord(classId,date),a=r.records.find(x=>x.studentId===studentId&&x.temporary);
+ if(!a)return;
+ openModal(`<h2>Remove temporary student?</h2><div class="muted">"${esc(a.name||"Temporary student")}" will be removed from this session.</div><div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn danger" onclick="removeTemporary('${classId}','${date}','${studentId}')">Remove</button></div>`);
+}
+function removeTemporary(classId,date,studentId){
+ let r=getRecord(classId,date);r.records=r.records.filter(a=>!(a.temporary&&a.studentId===studentId));
+ save();closeModal();renderAttendance();toast("Temporary student removed")
+}
+function addTemporary(classId,date){
+ let future=date>today();
+ openModal(`<h2>Add temporary student</h2><div class="muted small">This person will be recorded for this session only and will not be added to the class permanently.${future?" This is a future lesson, so attendance can be marked when the lesson happens.":""}</div><label>Name</label><input id="tempName" placeholder="Student name"><div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveTemporary('${classId}','${date}')">Add</button></div>`);
+}
+function saveTemporary(classId,date){let name=$("tempName").value.trim();if(!name)return;let r=getRecord(classId,date);r.records.push({studentId:"temp_"+uid(),name,status:null,reason:"",temporary:true});save();closeModal();renderAttendance();toast("Temporary student added")}
+
+function editReason(classId,date,studentId){
+ let r=getRecord(classId,date),a=r.records.find(x=>x.studentId===studentId);if(!a)return;
+ openModal(`<h2>Absence reason</h2><div class="muted small">Optional. Leave blank if you don't need one.</div><label>Reason</label><input id="reasonInput" value="${esc(a.reason)}" placeholder="e.g. Sick"><div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveReason('${classId}','${date}','${studentId}')">Save</button></div>`)
+}
+function saveReason(classId,date,studentId){let a=getRecord(classId,date).records.find(x=>x.studentId===studentId);a.reason=$("reasonInput").value.trim();save();closeModal();renderAttendance()}
+function populateStudentFilters(){
+ let p=$("studentProgramFilter"),oldP=p?.value||"",l=$("studentLabelFilter"),oldL=l?.value||"";
+ populateProgramSelect("studentProgramFilter",oldP,true);
+ populateLabelSelect("studentLabelFilter",oldL,true,p?.value||"");
+ if(!labelsForProgram(p?.value||"").some(x=>x.id===oldL)&&l)l.value="";
+}
+function studentProgramFilterChanged(){populateLabelSelect("studentLabelFilter","",true,$("studentProgramFilter").value);renderStudents()}
+function renderStudentLabelDropdown(programId,selectedIds=[]){
+ let box=$("studentLabelArea");if(!box)return;
+ let labels=labelsForProgram(programId),selected=new Set(selectedIds||[]);
+ box.innerHTML=programId
+   ? (labels.length
+      ? `<div class="class-student-list" style="max-height:180px">${labels.map(l=>`<label class="class-label-check"><input class="studentLabel" type="checkbox" value="${l.id}" ${selected.has(l.id)?"checked":""}> <span class="tag-chip" style="${tagStyle("label",l.colorIndex)}">${esc(l.name)}</span></label>`).join("")}</div>`
+      : '<div class="muted small">No labels for this program yet. Create labels in Programs & Labels.</div>')
+   : '<div class="card empty" style="padding:10px">Select program first</div>';
+}
+function openStudent(id=""){
+ let s=db.students.find(x=>x.id===id)||{name:"",active:true,notes:"",programId:"",labelIds:[]};
+ openModal(`<h2>${id?"Edit":"Add"} Student</h2><label>Name</label><input id="sName" value="${esc(s.name)}" placeholder="Full name"><label>Program</label><select id="sProgram" onchange="renderStudentLabelDropdown(this.value,[])"></select><label>Labels</label><div class="small muted">Optional. Select one or more labels from the selected program.</div><div id="studentLabelArea" style="margin-top:7px"></div><label>Status</label><select id="sActive"><option value="true" ${s.active?"selected":""}>Active</option><option value="false" ${!s.active?"selected":""}>Inactive</option></select><label>Notes</label><textarea id="sNotes" placeholder="Optional">${esc(s.notes||"")}</textarea><div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveStudent('${id}')">Save</button></div>`);
+ populateProgramSelect("sProgram",s.programId,false);renderStudentLabelDropdown(s.programId,s.labelIds||[]);
+}
+function saveStudent(id){let name=$("sName").value.trim();if(!name){alert("Enter a student name.");return}let programId=$("sProgram").value;let validLabels=new Set(labelsForProgram(programId).map(l=>l.id));let labelIds=[...document.querySelectorAll(".studentLabel:checked")].map(x=>x.value).filter(x=>validLabels.has(x));let obj={name,active:$("sActive").value==="true",notes:$("sNotes").value,programId,labelIds};if(id){let st=db.students.find(x=>x.id===id);Object.assign(st,obj)}else db.students.push({id:uid(),...obj});save();closeModal();populateStudentFilters();renderStudents();renderClasses();toast("Student saved")}
+function deleteStudent(id){
+ let s=db.students.find(x=>x.id===id);if(!s)return;
+ openModal(`<h2>Delete Student?</h2><div class="muted">Are you sure you want to delete <b>${esc(s.name)}</b>?</div><div class="small muted" style="margin-top:10px">The student will be removed from the Students list and recurring class lists. Their existing attendance history will be preserved.</div><div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Keep Student</button><button class="btn danger" onclick="confirmDeleteStudent('${id}')">Yes, Delete Student</button></div>`);
+}
+function confirmDeleteStudent(id){
+ let s=db.students.find(x=>x.id===id);if(!s)return;
+ db.attendance.forEach(r=>r.records.forEach(a=>{if(a.studentId===id&&!a.name)a.name=s.name;}));
+ db.classes.forEach(c=>{c.studentIds=(c.studentIds||[]).filter(studentId=>studentId!==id);});
+ db.students=db.students.filter(x=>x.id!==id);
+ save();closeModal();populateStudentFilters();renderStudents();renderClasses();toast("Student deleted");
+}
+
+function renderStudents(){
+ let q=($("studentSearch")?.value||"").toLowerCase().trim(),programId=$("studentProgramFilter")?.value||"",labelId=$("studentLabelFilter")?.value||"";
+ let arr=db.students.filter(s=>{let labels=s.labelIds||[];return (!q||s.name.toLowerCase().includes(q))&&(!programId||s.programId===programId)&&(!labelId||labels.includes(labelId))});
+ arr.sort((a,b)=>a.name.localeCompare(b.name,undefined,{sensitivity:"base"}));
+ $("studentsArea").innerHTML=arr.length?arr.map(s=>{let p=programById(s.programId),labels=studentLabels(s),st=attendanceStats(s.id);return `<div class="list-item clickable" onclick="studentProfile('${s.id}')"><div class="row"><div><b>${esc(s.name)}</b><div class="small muted">${p?`<span class="tag-chip" style="${tagStyle("program",p.colorIndex)}">${esc(p.name)}</span>`:'<span class="muted">No program</span>'} · ${s.active?"Active":"Inactive"} · ${st.attended}/${st.total} attended</div>${labels.length?`<div class="tag-list" style="margin-top:5px;display:flex;gap:5px;flex-wrap:wrap">${labels.map(l=>`<span class="tag-chip" style="${tagStyle("label",l.colorIndex)}">${esc(l.name)}</span>`).join("")}</div>`:""}${s.notes?`<div class="small muted" style="margin-top:7px"><b>Notes:</b> ${esc(s.notes)}</div>`:""}</div><span class="badge ${s.active?"present":"inactive"}">${s.active?"Active":"Inactive"}</span></div></div>`}).join(""):`<div class="card empty">No students match these filters.</div>`
+}
+
+function renderProgramsLabels(){
+ $("programsArea").innerHTML=db.programs.length?db.programs.map(p=>{let labels=p.labels||[];return `<div class="taxonomy-row" style="display:block;padding:14px"><div class="row"><div><span class="tag-chip" style="${tagStyle("program",p.colorIndex)};font-size:16px;padding:6px 10px">${esc(p.name)}</span></div><div class="actions"><button class="btn" onclick="addLabel('${p.id}')">+ Label</button><button class="btn danger" onclick="deleteProgram('${p.id}')">Delete</button></div></div><div class="taxonomy-list" style="margin-top:10px">${labels.length?labels.map(l=>`<div class="taxonomy-row"><span class="tag-chip" style="${tagStyle("label",l.colorIndex)}">${esc(l.name)}</span><button class="btn danger" onclick="deleteLabel('${l.id}')">Delete</button></div>`).join(""):'<div class="muted small">No labels yet. Add a label for this program.</div>'}</div></div>`}).join(""):`<div class="card empty">No programs yet. Add a program to get started.</div>`;
+}
+function addProgram(){openModal(`<h2>Add Program</h2><label>Program name</label><input id="newProgramName" placeholder="Program name"><div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveNewProgram()">Save</button></div>`)}
+function saveNewProgram(){let name=$("newProgramName").value.trim();if(!name)return;if(db.programs.some(p=>p.name.toLowerCase()===name.toLowerCase())){alert("A program with that name already exists.");return}db.programs.push({id:uid(),name,labels:[],colorIndex:nextColorIndex(db.programs)});save();closeModal();renderProgramsLabels();populateStudentFilters();renderStudents();renderClasses();toast("Program added")}
+function addLabel(programId){let p=programById(programId);if(!p)return;openModal(`<h2>Add Label</h2><div class="muted small">Program: ${esc(p.name)}</div><label>Label name</label><input id="newLabelName" placeholder="Label name"><div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveNewLabel('${programId}')">Save</button></div>`)}
+function saveNewLabel(programId){let p=programById(programId),name=$("newLabelName").value.trim();if(!p||!name)return;if((p.labels||[]).some(l=>l.name.toLowerCase()===name.toLowerCase())){alert("That label already exists in this program.");return}p.labels=p.labels||[];p.labels.push({id:uid(),name,colorIndex:nextColorIndex(p.labels)});save();closeModal();renderProgramsLabels();populateStudentFilters();renderStudents();renderClasses();toast("Label added")}
+function deleteProgram(id){if(db.students.some(s=>s.programId===id)){alert("This program is assigned to students. Reassign those students before deleting it.");return}db.programs=db.programs.filter(p=>p.id!==id);save();renderProgramsLabels();populateStudentFilters();renderStudents();renderClasses();toast("Program deleted")}
+function deleteLabel(id){let owner=db.programs.find(p=>(p.labels||[]).some(l=>l.id===id));if(!owner)return;if(db.students.some(s=>(s.labelIds||[]).includes(id))||db.classes.some(c=>c.defaultLabelId===id)){alert("This label is in use. Remove it from students/classes before deleting it.");return}owner.labels=owner.labels.filter(l=>l.id!==id);save();renderProgramsLabels();populateStudentFilters();renderStudents();renderClasses();toast("Label deleted")}
+
+function attendanceStats(studentId){let arr=[];db.attendance.forEach(r=>r.records.forEach(a=>{if(a.studentId===studentId)arr.push(a)}));return {total:arr.length,attended:arr.filter(a=>a.status==="present").length,absent:arr.filter(a=>a.status==="absent").length}}
+function studentMonthStats(id,month){
+ let rows=[];
+ db.attendance.forEach(r=>{
+   if(r.date>today()||r.cancelled||r.date.slice(0,7)!==month)return;
+   let a=r.records.find(x=>x.studentId===id);
+   if(a){let c=db.classes.find(x=>x.id===r.classId);rows.push({date:r.date,className:c?.name||r.className||"Unknown",status:a.status,reason:a.reason})}
+ });
+ rows.sort((a,b)=>b.date.localeCompare(a.date));
+ return {rows,attended:rows.filter(x=>x.status==="present").length,absent:rows.filter(x=>x.status==="absent").length,recorded:rows.length};
+}
+function changeStudentMonth(id,direction){
+ let input=$("studentMonth");if(!input)return;
+ let d=new Date((input.value||today().slice(0,7))+"-01T12:00:00");d.setMonth(d.getMonth()+direction);
+ input.value=d.toISOString().slice(0,7);renderStudentProfile(id);
+}
+function studentMonthWheel(e,id){
+ e.preventDefault();e.stopPropagation();
+ let direction=e.deltaY<0?-3:3;
+ changeStudentMonth(id,direction);
+}
+function renderStudentProfile(id){
+ let s=db.students.find(x=>x.id===id);if(!s)return;
+ let month=$("studentMonth")?.value||today().slice(0,7),st=studentMonthStats(id,month),monthLabel=new Date(month+"-01T12:00:00").toLocaleDateString(undefined,{month:"long",year:"numeric"});
+ let rows=st.rows;
+ let program=programById(s.programId),labels=studentLabels(s);
+ $("modalBody").innerHTML=`<div class="row"><div><h2>${esc(s.name)}</h2><div class="muted">${s.active?"Active":"Inactive"}${program?`<div style="margin-top:6px"><span class="tag-chip" style="${tagStyle("program",program.colorIndex)}">${esc(program.name)}</span></div>`:""}</div>${labels.length?`<div class="tag-list" style="margin-top:7px;display:flex;gap:5px;flex-wrap:wrap">${labels.map(l=>`<span class="tag-chip" style="${tagStyle("label",l.colorIndex)}">${esc(l.name)}</span>`).join("")}</div>`:""}${s.notes?`<div class="small muted" style="margin-top:8px"><b>Notes:</b> ${esc(s.notes)}</div>`:""}</div><button class="btn" onclick="closeModal();openStudent('${id}')">Edit</button></div><div class="month-nav student-month-nav"><button class="btn" onclick="changeStudentMonth('${id}',-1)">←</button><input id="studentMonth" class="month-input" type="month" value="${month}" onchange="renderStudentProfile('${id}')" onwheel="studentMonthWheel(event,'${id}')"><button class="btn" onclick="changeStudentMonth('${id}',1)">→</button></div><div class="grid three student-stats" style="margin:14px 0"><div class="card"><div class="stat">${st.attended}</div><div class="stat-label">Attended</div></div><div class="card"><div class="stat">${st.absent}</div><div class="stat-label">Missed</div></div><div class="card"><div class="stat">${st.recorded}</div><div class="stat-label">Recorded</div></div></div><h3>Attendance for ${esc(monthLabel)}</h3>${rows.length?`<table><thead><tr><th>Date</th><th>Class</th><th>Result</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${fmt(x.date)}</td><td>${esc(x.className)}</td><td><span class="badge ${x.status==="present"?"present":x.status==="absent"?"absent":"pending"}">${x.status||"Not marked"}</span>${x.reason?` <span class="small muted">— ${esc(x.reason)}</span>`:""}</td></tr>`).join("")}</tbody></table>`:`<div class="empty">No attendance has been recorded for this student in ${esc(monthLabel)}.</div>`}<div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn danger" onclick="deleteStudent('${id}')">Delete Student</button><button class="btn" onclick="closeModal()">Close</button></div>`;
+}
+function studentProfile(id){
+ let s=db.students.find(x=>x.id===id);if(!s)return;
+ openModal(`<div class="row"><div><h2>${esc(s.name)}</h2><div class="muted">Loading ${esc(new Date().toLocaleString(undefined,{month:"long",year:"numeric"}))}...</div></div></div>`);
+ renderStudentProfile(id);
+}
+
+function classStudentMatches(s,programFilter,labelFilter,query){let labels=s.labelIds||[];return (!programFilter||s.programId===programFilter)&&(!labelFilter||labels.includes(labelFilter))&&(!query||s.name.toLowerCase().includes(query))}
+function openClass(id=""){
+ let c=db.classes.find(x=>x.id===id)||{name:"",days:[],day:"",time:"",notes:"",studentIds:[],programId:"",listMode:"manual",defaultLabelId:""};
+ let days=Array.isArray(c.days)?c.days:(c.day?[c.day]:[]);
+ let activeStudents=db.students.filter(s=>s.active);
+ let opts=activeStudents.map(s=>`<label class="class-student-row" data-student-name="${esc(s.name.toLowerCase())}" data-program-id="${esc(s.programId||"")}" data-label-ids="${esc((s.labelIds||[]).join(","))}"><input class="classStudent" type="checkbox" value="${s.id}" ${c.studentIds.includes(s.id)?"checked":""} onchange="updateClassStudentCount()"> <span>${esc(s.name)}</span></label>`).join("")||'<div class="muted small">Add active students first.</div>';
+ openModal(`<h2>${id?"Edit":"Add"} Recurring Class</h2><label>Class name</label><input id="cName" value="${esc(c.name)}" placeholder="e.g. Private Lesson"><div class="grid two"><div><label>Program</label><select id="cProgram" onchange="refreshClassStudentFilters()"></select></div><div><label>Time</label><input id="cTime" type="time" value="${esc(c.time)}"></div></div><label>Days</label><div id="cDays" class="day-checks">${["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"].map(x=>`<label class="day-check"><input type="checkbox" class="classDay" value="${x}" ${days.includes(x)?"checked":""}> <span>${x}</span></label>`).join("")}</div><label>Default student list</label><select id="cListMode" onchange="toggleClassLabelMode()"><option value="manual" ${c.listMode!=="label"?"selected":""}>Manual Student List</option><option value="label" ${c.listMode==="label"?"selected":""}>Label Default List</option></select><div id="classLabelMode" style="display:${c.listMode==="label"?"block":"none"}"><label>Default label</label><select id="cDefaultLabel" onchange="applyDefaultLabel()"></select><div class="small muted" style="margin-top:5px">Students with this label are automatically included, and you can still edit the list below.</div></div><label>Find students</label><div class="class-filter-row"><input id="classStudentSearch" placeholder="Search students..." oninput="filterClassStudents()"><select id="classStudentProgramFilter" onchange="filterClassStudents()"></select><select id="classStudentLabelFilter" onchange="filterClassStudents()"></select></div><div id="classStudentList" class="class-student-list">${opts}</div><div id="classStudentCount" class="small muted" style="margin-top:7px">${c.studentIds.length} selected</div><label>Notes</label><textarea id="cNotes">${esc(c.notes||"")}</textarea><div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveClass('${id}')">Save Class</button></div>`);
+ populateProgramSelect("cProgram",c.programId,false);populateProgramSelect("classStudentProgramFilter",c.programId,true);populateLabelSelect("classStudentLabelFilter","",true,c.programId);populateLabelSelect("cDefaultLabel",c.defaultLabelId,false,c.programId);refreshClassStudentFilters();if(c.listMode==="label")applyDefaultLabel();else updateClassStudentCount();
+}
+function updateClassStudentCount(){let n=document.querySelectorAll('#classStudentList .classStudent:checked').length;if($('classStudentCount'))$('classStudentCount').textContent=`${n} selected`}
+function applyDefaultLabel(){if(!$("cProgram")?.value)return;let id=$("cDefaultLabel")?.value||"";if(!id)return;document.querySelectorAll('#classStudentList .classStudent').forEach(cb=>{let row=cb.closest('.class-student-row'),labels=(row.dataset.labelIds||'').split(',').filter(Boolean);if(labels.includes(id))cb.checked=true});updateClassStudentCount();filterClassStudents()}
+function toggleClassLabelMode(){let mode=$("cListMode").value,box=$("classLabelMode");box.style.display=mode==="label"?"block":"none";if(mode==="label")applyDefaultLabel()}
+function refreshClassStudentFilters(){let p=$("cProgram")?.value||"";if($("classStudentProgramFilter"))$("classStudentProgramFilter").value=p;let l=$("classStudentLabelFilter")?.value||"",d=$("cDefaultLabel")?.value||"";populateLabelSelect("classStudentLabelFilter",l,true,p);populateLabelSelect("cDefaultLabel",d,false,p);if($("classStudentLabelFilter")&&!labelsForProgram(p).some(x=>x.id===$("classStudentLabelFilter").value))$("classStudentLabelFilter").value="";if($("cDefaultLabel")&&!labelsForProgram(p).some(x=>x.id===$("cDefaultLabel").value))$("cDefaultLabel").value="";filterClassStudents()}
+function filterClassStudents(){let q=($("classStudentSearch")?.value||"").toLowerCase().trim(),p=$("classStudentProgramFilter")?.value||"",l=$("classStudentLabelFilter")?.value||"";document.querySelectorAll('#classStudentList .class-student-row').forEach(row=>{let labels=(row.dataset.labelIds||'').split(',').filter(Boolean);let name=(row.dataset.studentName||'');row.style.display=(!q||name.includes(q))&&(!p||row.dataset.programId===p)&&(!l||labels.includes(l))?'flex':'none'});updateClassStudentCount()}
+function saveClass(id){let name=$("cName").value.trim();if(!name){alert("Enter a class name.");return}let days=[...document.querySelectorAll(".classDay:checked")].map(x=>x.value);if(!days.length){alert("Select at least one day.");return}let studentIds=[...document.querySelectorAll(".classStudent:checked")].map(x=>x.value);let obj={name,days,day:days[0],time:$("cTime").value,studentIds,notes:$("cNotes").value,programId:$("cProgram").value,listMode:$("cListMode").value,defaultLabelId:$("cDefaultLabel").value};if(id)Object.assign(db.classes.find(x=>x.id===id),obj);else db.classes.push({id:uid(),...obj});save();closeModal();populateSelectors();renderClasses();toast("Class saved")}
+function renderClasses(){
+ $("classesArea").innerHTML=db.classes.length?db.classes.map(c=>{let p=programById(c.programId),label=labelById(c.defaultLabelId);return `<div class="card"><div class="row"><div><h2>${esc(c.name)}</h2><div class="muted">${esc((Array.isArray(c.days)?c.days:(c.day?[c.day]:[])).join(", "))}${c.time?" · "+esc(c.time):""} · ${c.studentIds.length} default students</div><div class="small" style="margin-top:6px">${p?`<span class="badge pending">${esc(p.name)}</span>`:""} ${c.listMode==="label"&&label?`<span class="badge present">Label: ${esc(label.name)}</span>`:""}</div></div><div class="actions"><button class="btn" onclick="openClass('${c.id}')">Edit</button><button class="btn primary" onclick="openClassAttendance('${c.id}')">Take Attendance</button><button class="btn danger" onclick="confirmDeleteClass('${c.id}')">Delete</button></div></div><div class="small muted" style="margin-top:8px">${c.studentIds.map(id=>esc(db.students.find(s=>s.id===id)?.name||"Unknown")).join(", ")||"No students assigned yet."}</div></div>`}).join(""):`<div class="card empty">No classes yet. Create a recurring class and choose its default students.</div>`
+}
+
+function confirmDeleteClass(id){
+ let c=db.classes.find(x=>x.id===id);if(!c)return;
+ openModal(`<h2>Delete class?</h2><div class="muted">"${esc(c.name)}" will be removed. Attendance history will not be deleted.</div><div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn danger" onclick="deleteClass('${id}')">Delete Class</button></div>`)
+}
+function deleteClass(id){
+ let c=db.classes.find(x=>x.id===id);if(!c)return;
+ db.attendance.forEach(r=>{if(r.classId===id&&!r.className)r.className=c.name});
+ db.classes=db.classes.filter(x=>x.id!==id);
+ save();closeModal();populateSelectors();renderClasses();renderAttendance();toast("Class deleted")
+}
+function openClassAttendance(id){showView("attendance");$("attClass").value=id;$("attDate").value=today();renderAttendance()}
+
+function recordedSessionsForClass(classId,month=""){
+ let c=db.classes.find(x=>x.id===classId);
+ if(!c)return [];
+ return db.attendance.filter(r=>{
+   let sameClass=r.classId===classId||(r.className&&r.className===c.name);
+   return sameClass&&r.date<=today()&&!r.cancelled&&(!month||r.date.slice(0,7)===month);
+ }).sort((a,b)=>a.date.localeCompare(b.date));
+}
+function populateHistorySelectors(){
+ let c=$("histClass"),old=c.value;
+ c.innerHTML='<option value="">Select a class</option>'+db.classes.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join("");
+ if(old&&db.classes.some(x=>x.id===old))c.value=old;
+ $("histMonth").value=$("histMonth").value||today().slice(0,7);
+ populateHistoryDates();
+}
+function populateHistoryDates(preferred=""){
+ let cid=$("histClass").value,month=$("histMonth").value||today().slice(0,7),d=$("histDate"),sessions=cid?recordedSessionsForClass(cid,month):[],old=preferred||d.value;
+ if(cid&&!sessions.length){
+   let all=recordedSessionsForClass(cid,"");
+   if(all.length){
+     month=all[all.length-1].date.slice(0,7);
+     $("histMonth").value=month;
+     sessions=recordedSessionsForClass(cid,month);
+   }
+ }
+ d.innerHTML=sessions.length?sessions.map(r=>`<option value="${r.date}">${fmt(r.date)}</option>`).join(""):`<option value="">No recorded sessions</option>`;
+ if(old&&sessions.some(r=>r.date===old))d.value=old;else if(sessions.length)d.value=sessions[sessions.length-1].date;
+}
+function historyClassChanged(){populateHistoryDates();renderHistory()}
+function historyMonthChanged(){populateHistoryDates();renderHistory()}
+function moveHistorySession(direction){
+ let cid=$("histClass").value,month=$("histMonth").value||today().slice(0,7),sessions=recordedSessionsForClass(cid,month),current=$("histDate").value,i=sessions.findIndex(r=>r.date===current),next=sessions[i+direction];
+ if(next){$("histDate").value=next.date;renderHistory()}
+}
+function renderHistory(){
+ let cid=$("histClass").value,month=$("histMonth").value||today().slice(0,7),date=$("histDate").value;
+ if(!cid){$("historyArea").innerHTML=`<div class="card empty">Select a recurring class to view its attendance history.</div>`;return}
+ let sessions=recordedSessionsForClass(cid,month),r=sessions.find(x=>x.date===date)||sessions[sessions.length-1],c=db.classes.find(x=>x.id===cid);
+ if(!r){$("historyArea").innerHTML=`<div class="card empty">No attendance sessions were recorded for ${esc(c?.name||"this class")} in ${esc(month)}.</div>`;return}
+ if($("histDate").value!==r.date)$("histDate").value=r.date;
+ let present=r.records.filter(x=>x.status==="present").length,absent=r.records.filter(x=>x.status==="absent").length,total=r.records.length;
+ let idx=sessions.findIndex(x=>x.id===r.id);
+ let rows=r.records.map(a=>{let s=db.students.find(x=>x.id===a.studentId);return {name:s?.name||a.name||"Temporary student",status:a.status,reason:a.reason,temporary:a.temporary}});
+ $("historyArea").innerHTML=`<div class="card"><div class="row"><div><h2>${esc(c?.name||r.className||"Class")}</h2><div class="muted">Attendance session</div></div><div class="stat">${total}</div></div><div class="history-session-date" style="margin:16px 0"><h2>${fmt(r.date)}</h2></div><div class="grid three"><div class="card"><div class="stat">${present}</div><div class="stat-label">Present</div></div><div class="card"><div class="stat">${absent}</div><div class="stat-label">Absent</div></div><div class="card"><div class="stat">${total-present-absent}</div><div class="stat-label">Not marked</div></div></div><div class="history-students list">${rows.map(x=>`<div class="list-item"><div class="row"><div><b>${esc(x.name)}</b>${x.temporary?` <span class="badge pending">Temporary</span>`:""}${x.reason?`<div class="small muted">${esc(x.reason)}</div>`:""}</div><span class="badge ${x.status==="present"?"present":x.status==="absent"?"absent":"pending"}">${x.status||"Not marked"}</span></div></div>`).join("")}</div><div class="history-session-nav" style="margin-top:16px"><button class="btn" ${idx<=0?"disabled":""} onclick="moveHistorySession(-1)">← Previous Session</button><span class="small muted">Session ${idx+1} of ${sessions.length}</span><button class="btn" ${idx<0||idx>=sessions.length-1?"disabled":""} onclick="moveHistorySession(1)">Next Session →</button></div></div>`;
+}
+
+function exportData(){
+ let blob=new Blob([JSON.stringify(db,null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="alkawn-attendance-backup-"+today()+".json";a.click();URL.revokeObjectURL(a.href);toast("Backup downloaded")}
+function importData(e){
+ let f=e.target.files[0];if(!f)return;let reader=new FileReader();reader.onload=()=>{try{let x=JSON.parse(reader.result);if(!Array.isArray(x.students)||!Array.isArray(x.classes)||!Array.isArray(x.attendance))throw Error();db=x;save();location.reload()}catch{alert("That file does not look like an Alkawn Attendance backup.")}};reader.readAsText(f);e.target.value=""}
+
+if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
+$("attDate").value=today();populateSelectors();populateStudentFilters();renderAttendance();
+</script>
+</body>
+</html>
