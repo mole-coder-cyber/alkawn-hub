@@ -23,17 +23,33 @@ label{display:block;font-size:13px;font-weight:650;margin:10px 0 5px}input,selec
 .tag-chip{display:inline-flex;align-items:center;border-radius:999px;padding:4px 9px;font-size:12px;font-weight:700;border:1px solid}.label-dropdown{position:relative}.label-dropdown-toggle{width:100%;display:flex;align-items:center;justify-content:space-between;text-align:left}.label-dropdown-menu{position:absolute;left:0;right:0;top:calc(100% + 5px);z-index:30;background:#fff;border:1px solid var(--line);border-radius:9px;padding:7px;box-shadow:0 8px 25px #0002;max-height:220px;overflow:auto}.label-dropdown-menu label{display:flex;align-items:center;gap:8px;margin:0;padding:8px;border-radius:7px;font-weight:500}.label-dropdown-menu label:hover{background:#f4f6f8}.label-dropdown-menu input{width:auto}.label-dropdown.disabled{opacity:.6}.badge{display:inline-flex;align-items:center;border-radius:999px;padding:3px 8px;font-size:12px;font-weight:700}.present{background:#e5f6ed;color:var(--good)}.absent{background:#fdebea;color:var(--bad)}.pending{background:#fff4d6;color:var(--warn)}.inactive{background:#edf0f2;color:#66717d}
 .att-summary{position:sticky;top:80px;z-index:10;background:#fff;box-shadow:0 2px 8px #0001}.student-stats .card{padding:10px}.student-stats .stat{font-size:23px}.student-month-nav{justify-content:center;margin:10px 0 16px}.student-month-nav .month-input{max-width:180px}.att-summary .row{gap:12px}.att-summary-actions{display:flex;align-items:center;gap:14px;flex-wrap:wrap}.summary-count{font-weight:750}.attendance-counts{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;width:100%}.attendance-counts>div{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;line-height:1.05;min-width:82px;padding:7px 12px;border:1px solid var(--line);border-radius:10px;background:#fff}.attendance-counts b{font-size:20px}.attendance-counts span:not(.badge){font-size:12px;color:var(--muted);margin-top:3px}.att-row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;border:1px solid var(--line);border-radius:10px;padding:12px;background:#fff}.att-main{min-width:0}.att-name{font-weight:750}.att-meta{font-size:12px;color:var(--muted)}.att-buttons{display:flex;gap:6px}.att-buttons button{min-width:78px;padding:10px 8px;border-radius:8px;border:1px solid #ccd3d9;background:#fff}.att-buttons button:disabled{opacity:.45;cursor:not-allowed}.month-nav{display:flex;gap:8px;align-items:center}.month-nav .month-input{max-width:180px}.att-buttons .selected-present{background:#e5f6ed;border-color:#7bc79e;color:var(--good);font-weight:800}.att-buttons .selected-absent{background:#fdebea;border-color:#e39b95;color:var(--bad);font-weight:800}
 table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:9px;border-bottom:1px solid var(--line);font-size:14px}th{color:var(--muted);font-size:12px}.empty{text-align:center;padding:28px;color:var(--muted)}
-dialog{border:0;border-radius:13px;padding:0;width:min(560px,calc(100% - 24px));box-shadow:0 15px 50px #0005}dialog::backdrop{background:#0006}.modal{padding:18px}.modal h2{margin-bottom:3px}.toast{position:fixed;right:16px;bottom:16px;background:var(--text);color:#fff;padding:11px 14px;border-radius:9px;box-shadow:0 6px 20px #0003;display:none;z-index:20}.toast.show{display:block}
+dialog{border:0;border-radius:13px;padding:0;width:min(560px,calc(100% - 24px));box-shadow:0 15px 50px #0005}dialog::backdrop{background:#0006}.modal{padding:18px}.modal h2{margin-bottom:3px}.toast{position:fixed;right:16px;bottom:16px;background:var(--text);color:#fff;padding:11px 14px;border-radius:9px;box-shadow:0 6px 20px #0003;display:none;z-index:20}.toast.show{display:block}.hidden{display:none!important}.auth-gate{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}.auth-card{width:min(430px,100%);background:#fff;border:1px solid var(--line);border-radius:14px;padding:24px;box-shadow:var(--shadow)}.auth-card h1{margin-bottom:4px}.auth-status{margin-top:10px;padding:10px;border-radius:8px;background:#f4f6f8;font-size:13px}.auth-status.error{background:#fdebea;color:var(--bad)}
 @media(max-width:700px){main{padding:12px}.grid.two,.grid.three{grid-template-columns:1fr}.att-row{grid-template-columns:1fr}.att-buttons button{flex:1}.att-buttons{width:100%}header{align-items:flex-start}.header-actions{justify-content:flex-end}}
 </style>
 </head>
 <body>
-<div class="app">
+<div id="authGate" class="auth-gate">
+  <div class="auth-card">
+    <h1>Alkawn Hub</h1>
+    <div class="muted" style="margin-bottom:16px">Sign in to access your cloud attendance data.</div>
+    <label>Email</label>
+    <input id="authEmail" type="email" autocomplete="email" placeholder="Email address">
+    <label>Password</label>
+    <input id="authPassword" type="password" autocomplete="current-password" placeholder="Password">
+    <div class="actions" style="margin-top:14px">
+      <button class="btn primary" onclick="signIn()">Log In</button>
+      <button class="btn" onclick="signUp()">Create Account</button>
+    </div>
+    <div id="authStatus" class="auth-status hidden"></div>
+  </div>
+</div>
+<div id="app" class="app hidden">
 <header>
   <div class="brand">Alkawn Hub <small>Attendance</small></div>
   <div class="header-actions">
     <button onclick="exportData()">Backup</button>
     <button onclick="document.getElementById('importFile').click()">Restore</button>
+    <button onclick="signOut()">Log Out</button>
     <input id="importFile" type="file" accept=".json" hidden onchange="importData(event)">
   </div>
 </header>
@@ -103,13 +119,111 @@ dialog{border:0;border-radius:13px;padding:0;width:min(560px,calc(100% - 24px));
 <dialog id="modal"><div class="modal" id="modalBody"></div></dialog>
 <div id="toast" class="toast"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
+const SUPABASE_URL="https://genmsinngzjhkyjpirbe.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY="sb_publishable_puVTHYz26khc6F8_kSp2kA_-7Ikb-e8";
+const supabaseClient=supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
+let currentUser=null;
+let cloudReady=false;
+let cloudSaveTimer=null;
+let cloudSaving=false;
 const KEY="alkawnAttendanceV1";
 let db=load();
 const $=id=>document.getElementById(id);
 const uid=()=>crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36)+Math.random().toString(36).slice(2);
 function load(){try{return JSON.parse(localStorage.getItem(KEY))||{students:[],classes:[],attendance:[]}}catch{return {students:[],classes:[],attendance:[]}}}
-function save(){localStorage.setItem(KEY,JSON.stringify(db))}
+function save(){
+ localStorage.setItem(KEY,JSON.stringify(db));
+ if(cloudReady)scheduleCloudSave();
+}
+function scheduleCloudSave(){
+ clearTimeout(cloudSaveTimer);
+ cloudSaveTimer=setTimeout(()=>saveCloudData(),500);
+}
+async function saveCloudData(){
+ if(!cloudReady||!currentUser||cloudSaving)return;
+ cloudSaving=true;
+ try{
+   const {error}=await supabaseClient.from("alkawn_data").upsert({user_id:currentUser.id,data:db,updated_at:new Date().toISOString()});
+   if(error)throw error;
+ }catch(e){
+   console.error(e);
+   toast("Cloud save failed. Your local data is still safe.");
+ }finally{cloudSaving=false}
+}
+function hasAlkawnData(x){return !!(x&&((x.students&&x.students.length)||(x.classes&&x.classes.length)||(x.attendance&&x.attendance.length)||(x.programs&&x.programs.length)))}
+function setAuthStatus(message,isError=false){
+ const el=$("authStatus");
+ if(!el)return;
+ el.textContent=message||"";
+ el.classList.toggle("hidden",!message);
+ el.classList.toggle("error",!!isError);
+}
+function showApp(){$("authGate").classList.add("hidden");$("app").classList.remove("hidden")}
+function showAuth(){$("app").classList.add("hidden");$("authGate").classList.remove("hidden")}
+async function signIn(){
+ const email=$("authEmail").value.trim(),password=$("authPassword").value;
+ if(!email||!password){setAuthStatus("Enter your email and password.",true);return}
+ setAuthStatus("Signing in...");
+ const {error}=await supabaseClient.auth.signInWithPassword({email,password});
+ if(error)setAuthStatus(error.message,true);
+}
+async function signUp(){
+ const email=$("authEmail").value.trim(),password=$("authPassword").value;
+ if(!email||!password){setAuthStatus("Enter an email and password first.",true);return}
+ if(password.length<6){setAuthStatus("Password must be at least 6 characters.",true);return}
+ setAuthStatus("Creating account...");
+ const {data,error}=await supabaseClient.auth.signUp({email,password});
+ if(error){setAuthStatus(error.message,true);return}
+ if(data.session){setAuthStatus("Account created. Loading Alkawn Hub...")}else setAuthStatus("Account created. Check your email to confirm your account, then log in.");
+}
+async function signOut(){
+ await supabaseClient.auth.signOut();
+ cloudReady=false;currentUser=null;showAuth();setAuthStatus("You have been logged out.");
+}
+async function initializeCloudUser(user){
+ currentUser=user;
+ setAuthStatus("Loading your Alkawn data...");
+ try{
+   const {data,error}=await supabaseClient.from("alkawn_data").select("data").eq("user_id",user.id).maybeSingle();
+   if(error)throw error;
+   if(data&&data.data){
+     db=data.data;
+     migrateData();
+     localStorage.setItem(KEY,JSON.stringify(db));
+     cloudReady=true;
+     showApp();
+     populateSelectors();populateStudentFilters();renderAttendance();renderStudents();renderProgramsLabels();renderClasses();
+     toast("Cloud data loaded");
+   }else{
+     migrateData();
+     const useLocal=hasAlkawnData(db)?confirm("No cloud data exists for this account. Upload the Alkawn data currently on this device to the cloud?"):true;
+     if(useLocal){
+       cloudReady=true;
+       await saveCloudData();
+     }else{
+       db={students:[],classes:[],attendance:[],programs:[]};
+       cloudReady=true;
+       await saveCloudData();
+     }
+     showApp();
+     populateSelectors();populateStudentFilters();renderAttendance();renderStudents();renderProgramsLabels();renderClasses();
+     toast("Alkawn Hub is now connected to the cloud");
+   }
+ }catch(e){
+   console.error(e);
+   cloudReady=false;
+   setAuthStatus("Could not load Alkawn data: "+(e.message||e),true);
+   await supabaseClient.auth.signOut();
+ }
+}
+supabaseClient.auth.onAuthStateChange((event,session)=>{
+ setTimeout(()=>{
+   if(session?.user){initializeCloudUser(session.user)}
+   else{cloudReady=false;currentUser=null;showAuth()}
+ },0);
+});
 function migrateData(){
  db.students=Array.isArray(db.students)?db.students:[];db.classes=Array.isArray(db.classes)?db.classes:[];db.attendance=Array.isArray(db.attendance)?db.attendance:[];
  db.programs=Array.isArray(db.programs)?db.programs:[];
@@ -431,7 +545,10 @@ function importData(e){
  let f=e.target.files[0];if(!f)return;let reader=new FileReader();reader.onload=()=>{try{let x=JSON.parse(reader.result);if(!Array.isArray(x.students)||!Array.isArray(x.classes)||!Array.isArray(x.attendance))throw Error();db=x;save();location.reload()}catch{alert("That file does not look like an Alkawn Attendance backup.")}};reader.readAsText(f);e.target.value=""}
 
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
-$("attDate").value=today();populateSelectors();populateStudentFilters();renderAttendance();
+$("attDate").value=today();
+// Keep the existing local data available as a safety net until cloud data is loaded.
+showAuth();
+
 </script>
 </body>
 </html>
