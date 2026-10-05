@@ -47,7 +47,6 @@ dialog{border:0;border-radius:13px;padding:0;width:min(560px,calc(100% - 24px));
 <header>
   <div class="brand">Alkawn Hub <small>Attendance</small></div>
   <div class="header-actions">
-    <span id="cloudStatus" style="font-size:12px;opacity:.8;align-self:center">Cloud connected</span>
     <button onclick="exportData()">Backup</button>
     <button onclick="document.getElementById('importFile').click()">Restore</button>
     <button onclick="signOut()">Log Out</button>
@@ -129,8 +128,6 @@ let currentUser=null;
 let cloudReady=false;
 let cloudSaveTimer=null;
 let cloudSaving=false;
-let cloudSaveQueued=false;
-let cloudSaveGeneration=0;
 const KEY="alkawnAttendanceV1";
 let db=load();
 const $=id=>document.getElementById(id);
@@ -145,52 +142,17 @@ function scheduleCloudSave(){
  cloudSaveTimer=setTimeout(()=>saveCloudData(),500);
 }
 async function saveCloudData(){
- if(!cloudReady||!currentUser){return false}
- if(cloudSaving){
-   cloudSaveQueued=true;
-   return false;
- }
+ if(!cloudReady||!currentUser||cloudSaving)return;
  cloudSaving=true;
- cloudSaveQueued=false;
- setCloudStatus("Saving…");
- const generation=++cloudSaveGeneration;
- // Snapshot the data at the moment this upload begins. If another change is made
- // while the upload is running, the queued second upload will contain that change.
- const snapshot=JSON.parse(JSON.stringify(db));
  try{
-   const {error}=await supabaseClient.from("alkawn_data").upsert({
-     user_id:currentUser.id,
-     data:snapshot,
-     updated_at:new Date().toISOString()
-   },{onConflict:"user_id"});
+   const {error}=await supabaseClient.from("alkawn_data").upsert({user_id:currentUser.id,data:db,updated_at:new Date().toISOString()});
    if(error)throw error;
-   console.log("Alkawn cloud save succeeded",{generation});
-   setCloudStatus("Cloud saved");
-   return true;
  }catch(e){
-   console.error("Alkawn cloud save failed",e);
-   toast("Cloud save failed: "+(e.message||"check your connection"));
-   setCloudStatus("Cloud save failed",true);
-   return false;
- }finally{
-   cloudSaving=false;
-   if(cloudSaveQueued && cloudReady && currentUser){
-     cloudSaveQueued=false;
-     scheduleCloudSave();
-   }
- }
-}
-async function flushCloudSave(){
- clearTimeout(cloudSaveTimer);
- return await saveCloudData();
+   console.error(e);
+   toast("Cloud save failed. Your local data is still safe.");
+ }finally{cloudSaving=false}
 }
 function hasAlkawnData(x){return !!(x&&((x.students&&x.students.length)||(x.classes&&x.classes.length)||(x.attendance&&x.attendance.length)||(x.programs&&x.programs.length)))}
-function setCloudStatus(message,isError=false){
- const el=$("cloudStatus");
- if(!el)return;
- el.textContent=message;
- el.style.color=isError?"#ffb4ae":"#fff";
-}
 function setAuthStatus(message,isError=false){
  const el=$("authStatus");
  if(!el)return;
@@ -217,7 +179,6 @@ async function signUp(){
  if(data.session){setAuthStatus("Account created. Loading Alkawn Hub...")}else setAuthStatus("Account created. Check your email to confirm your account, then log in.");
 }
 async function signOut(){
- await flushCloudSave();
  await supabaseClient.auth.signOut();
  cloudReady=false;currentUser=null;showAuth();setAuthStatus("You have been logged out.");
 }
@@ -232,7 +193,6 @@ async function initializeCloudUser(user){
      migrateData();
      localStorage.setItem(KEY,JSON.stringify(db));
      cloudReady=true;
-     setCloudStatus("Cloud connected");
      showApp();
      populateSelectors();populateStudentFilters();renderAttendance();renderStudents();renderProgramsLabels();renderClasses();
      toast("Cloud data loaded");
@@ -241,12 +201,10 @@ async function initializeCloudUser(user){
      const useLocal=hasAlkawnData(db)?confirm("No cloud data exists for this account. Upload the Alkawn data currently on this device to the cloud?"):true;
      if(useLocal){
        cloudReady=true;
-       setCloudStatus("Saving…");
        await saveCloudData();
      }else{
        db={students:[],classes:[],attendance:[],programs:[]};
        cloudReady=true;
-       setCloudStatus("Saving…");
        await saveCloudData();
      }
      showApp();
@@ -320,20 +278,19 @@ function scheduledClassesForDate(date){
 function classHasRecordForDate(c,date){
  return !!db.attendance.find(r=>r.date===date&&(r.classId===c.id||r.className===c.name));
 }
+function classTimeMinutes(time){
+ if(!time)return 9999;
+ let m=String(time).trim().match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/i);
+ if(!m)return 9999;
+ let h=Number(m[1]),min=Number(m[2]||0),ampm=(m[3]||"").toLowerCase();
+ if(ampm==="pm"&&h<12)h+=12;
+ if(ampm==="am"&&h===12)h=0;
+ return h*60+min;
+}
 function populateSelectors(){
  let date=$("attDate").value||today();
- let c=$("attClass"),old=c.value,classes=scheduledClassesForDate(date);
- classes.sort((a,b)=>{
-   if(!a.time&&!b.time)return a.name.localeCompare(b.name);
-   if(!a.time)return 1;
-   if(!b.time)return -1;
-   return a.time.localeCompare(b.time);
- });
- c.innerHTML=classes.length?classes.map(x=>{
-   let record=db.attendance.find(r=>r.date===date&&(r.classId===x.id||r.className===x.name));
-   let completed=record?.status==="completed";
-   return `<option value="${x.id}" ${completed?'style="color:#18864b;font-weight:700"':''}>${completed?'✓ ':''}${esc(x.name)}${x.time?" — "+esc(x.time):""}</option>`;
- }).join(""):`<option value="">No class scheduled for this day</option>`;
+ let c=$("attClass"),old=c.value,classes=scheduledClassesForDate(date).slice().sort((a,b)=>classTimeMinutes(a.time)-classTimeMinutes(b.time)||String(a.name||"").localeCompare(String(b.name||"")));
+ c.innerHTML=classes.length?classes.map(x=>`<option value="${x.id}">${esc(x.name)}${x.time?" — "+esc(x.time):""}</option>`).join(""):`<option value="">No class scheduled for this day</option>`;
  if(old&&classes.some(x=>x.id===old))c.value=old;else if(classes[0])c.value=classes[0].id;else c.value="";
  let when=date>today()?"future":date===today()?"today":"past";
  $("attDateNote").textContent=classes.length?`Classes for ${weekdayForDate(date)}.`:`No recurring classes are scheduled for ${weekdayForDate(date)}.`;
@@ -597,7 +554,6 @@ function importData(e){
  let f=e.target.files[0];if(!f)return;let reader=new FileReader();reader.onload=()=>{try{let x=JSON.parse(reader.result);if(!Array.isArray(x.students)||!Array.isArray(x.classes)||!Array.isArray(x.attendance))throw Error();db=x;save();location.reload()}catch{alert("That file does not look like an Alkawn Attendance backup.")}};reader.readAsText(f);e.target.value=""}
 
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
-window.addEventListener("online",()=>{if(cloudReady)scheduleCloudSave()});
 $("attDate").value=today();
 // Keep the existing local data available as a safety net until cloud data is loaded.
 showAuth();
