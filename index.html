@@ -141,16 +141,21 @@ function scheduleCloudSave(){
  clearTimeout(cloudSaveTimer);
  cloudSaveTimer=setTimeout(()=>saveCloudData(),500);
 }
+let cloudSaveQueued=false;
 async function saveCloudData(){
- if(!cloudReady||!currentUser||cloudSaving)return;
+ if(!cloudReady||!currentUser)return;
+ if(cloudSaving){cloudSaveQueued=true;return}
  cloudSaving=true;
  try{
    const {error}=await supabaseClient.from("alkawn_data").upsert({user_id:currentUser.id,data:db,updated_at:new Date().toISOString()});
    if(error)throw error;
  }catch(e){
-   console.error(e);
-   toast("Cloud save failed. Your local data is still safe.");
- }finally{cloudSaving=false}
+   console.error("Cloud save error:",e);
+   toast("Cloud save failed: "+(e.message||e));
+ }finally{
+   cloudSaving=false;
+   if(cloudSaveQueued){cloudSaveQueued=false;scheduleCloudSave()}
+ }
 }
 function hasAlkawnData(x){return !!(x&&((x.students&&x.students.length)||(x.classes&&x.classes.length)||(x.attendance&&x.attendance.length)||(x.programs&&x.programs.length)))}
 function setAuthStatus(message,isError=false){
@@ -220,8 +225,10 @@ async function initializeCloudUser(user){
 }
 supabaseClient.auth.onAuthStateChange((event,session)=>{
  setTimeout(()=>{
-   if(session?.user){initializeCloudUser(session.user)}
-   else{cloudReady=false;currentUser=null;showAuth()}
+   if(session?.user){
+     if(currentUser&&currentUser.id===session.user.id){currentUser=session.user;return}
+     initializeCloudUser(session.user);
+   }else{cloudReady=false;currentUser=null;showAuth()}
  },0);
 });
 function migrateData(){
@@ -278,9 +285,18 @@ function scheduledClassesForDate(date){
 function classHasRecordForDate(c,date){
  return !!db.attendance.find(r=>r.date===date&&(r.classId===c.id||r.className===c.name));
 }
+function classTimeMinutes(time){
+ if(!time)return 9999;
+ let m=String(time).trim().match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/i);
+ if(!m)return 9999;
+ let h=Number(m[1]),min=Number(m[2]||0),ampm=(m[3]||"").toLowerCase();
+ if(ampm==="pm"&&h<12)h+=12;
+ if(ampm==="am"&&h===12)h=0;
+ return h*60+min;
+}
 function populateSelectors(){
  let date=$("attDate").value||today();
- let c=$("attClass"),old=c.value,classes=scheduledClassesForDate(date);
+ let c=$("attClass"),old=c.value,classes=scheduledClassesForDate(date).slice().sort((a,b)=>classTimeMinutes(a.time)-classTimeMinutes(b.time)||String(a.name||"").localeCompare(String(b.name||"")));
  c.innerHTML=classes.length?classes.map(x=>`<option value="${x.id}">${esc(x.name)}${x.time?" — "+esc(x.time):""}</option>`).join(""):`<option value="">No class scheduled for this day</option>`;
  if(old&&classes.some(x=>x.id===old))c.value=old;else if(classes[0])c.value=classes[0].id;else c.value="";
  let when=date>today()?"future":date===today()?"today":"past";
@@ -446,7 +462,7 @@ function changeStudentMonth(id,direction){
 }
 function studentMonthWheel(e,id){
  e.preventDefault();e.stopPropagation();
- let direction=e.deltaY<0?-3:3;
+ let direction=e.deltaY<0?-1:1;
  changeStudentMonth(id,direction);
 }
 function renderStudentProfile(id){
