@@ -128,6 +128,11 @@ let currentUser=null;
 let cloudReady=false;
 let cloudSaveTimer=null;
 let cloudSaving=false;
+let cloudVersion=null;      // updated_at of the cloud row this device last loaded/saved
+let cloudDirty=false;       // true while this device has changes not yet saved to the cloud
+let cloudChangeSeq=0;
+let cloudConflict=false;
+let cloudChecking=false;
 const KEY="alkawnAttendanceV1";
 let db=load();
 const $=id=>document.getElementById(id);
@@ -138,24 +143,83 @@ function save(){
  if(cloudReady)scheduleCloudSave();
 }
 function scheduleCloudSave(){
+ cloudDirty=true;cloudChangeSeq++;
  clearTimeout(cloudSaveTimer);
  cloudSaveTimer=setTimeout(()=>saveCloudData(),500);
 }
 let cloudSaveQueued=false;
 async function saveCloudData(){
- if(!cloudReady||!currentUser)return;
+ if(!cloudReady||!currentUser||cloudConflict)return;
  if(cloudSaving){cloudSaveQueued=true;return}
  cloudSaving=true;
+ const seq=cloudChangeSeq;
  try{
-   const {error}=await supabaseClient.from("alkawn_data").upsert({user_id:currentUser.id,data:db,updated_at:new Date().toISOString()});
-   if(error)throw error;
+   const now=new Date().toISOString();
+   let res;
+   if(cloudVersion){
+     // Only overwrite the cloud row if nobody else has changed it since this device loaded it.
+     res=await supabaseClient.from("alkawn_data").update({data:db,updated_at:now}).eq("user_id",currentUser.id).eq("updated_at",cloudVersion).select("updated_at");
+   }else{
+     res=await supabaseClient.from("alkawn_data").insert({user_id:currentUser.id,data:db,updated_at:now}).select("updated_at");
+   }
+   if(res.error){
+     if(!cloudVersion&&res.error.code==="23505"){handleCloudConflict();return}
+     throw res.error;
+   }
+   if(!res.data||!res.data.length){handleCloudConflict();return}
+   cloudVersion=res.data[0].updated_at;
+   if(seq===cloudChangeSeq)cloudDirty=false;
  }catch(e){
    console.error("Cloud save error:",e);
    toast("Cloud save failed: "+(e.message||e));
  }finally{
    cloudSaving=false;
-   if(cloudSaveQueued){cloudSaveQueued=false;scheduleCloudSave()}
+   if(cloudSaveQueued&&!cloudConflict){cloudSaveQueued=false;scheduleCloudSave()}
  }
+}
+function handleCloudConflict(){
+ // Another device saved newer data. Do NOT overwrite it. Keep a backup of this device's changes, then load the latest cloud data.
+ cloudConflict=true;
+ clearTimeout(cloudSaveTimer);
+ cloudSaveQueued=false;
+ try{exportData()}catch(e){console.error(e)}
+ alert("Another device saved newer data to the cloud.\n\nYour latest changes on THIS device were NOT saved. A backup file of this device's data has just been downloaded so nothing is lost.\n\nThe app will now load the latest cloud data.");
+ cloudConflict=false;
+ refreshFromCloud(true);
+}
+async function refreshFromCloud(showToast){
+ if(!currentUser)return;
+ try{
+   const {data,error}=await supabaseClient.from("alkawn_data").select("data,updated_at").eq("user_id",currentUser.id).maybeSingle();
+   if(error)throw error;
+   if(data&&data.data){
+     db=data.data;
+     migrateData();
+     localStorage.setItem(KEY,JSON.stringify(db));
+     cloudVersion=data.updated_at;
+     cloudDirty=false;
+     populateSelectors();populateStudentFilters();renderAttendance();renderStudents();renderProgramsLabels();renderClasses();
+     if(showToast)toast("Updated with the latest cloud data");
+   }
+ }catch(e){
+   console.error("Cloud refresh error:",e);
+   toast("Could not refresh from the cloud: "+(e.message||e));
+ }
+}
+async function checkForCloudUpdates(){
+ if(cloudChecking||!cloudReady||!currentUser||cloudSaving||cloudDirty||cloudConflict)return;
+ if(document.visibilityState&&document.visibilityState!=="visible")return;
+ const m=$("modal");if(m&&m.open)return; // don't disturb an open form
+ cloudChecking=true;
+ try{
+   const {data,error}=await supabaseClient.from("alkawn_data").select("updated_at").eq("user_id",currentUser.id).maybeSingle();
+   if(error||!data)return;
+   if(data.updated_at!==cloudVersion&&!cloudDirty&&!cloudSaving){
+     const m2=$("modal");if(m2&&m2.open)return;
+     await refreshFromCloud(true);
+   }
+ }catch(e){console.error(e)}
+ finally{cloudChecking=false}
 }
 function hasAlkawnData(x){return !!(x&&((x.students&&x.students.length)||(x.classes&&x.classes.length)||(x.attendance&&x.attendance.length)||(x.programs&&x.programs.length)))}
 function setAuthStatus(message,isError=false){
@@ -185,18 +249,19 @@ async function signUp(){
 }
 async function signOut(){
  await supabaseClient.auth.signOut();
- cloudReady=false;currentUser=null;showAuth();setAuthStatus("You have been logged out.");
+ cloudReady=false;currentUser=null;cloudVersion=null;showAuth();setAuthStatus("You have been logged out.");
 }
 async function initializeCloudUser(user){
  currentUser=user;
  setAuthStatus("Loading your Alkawn data...");
  try{
-   const {data,error}=await supabaseClient.from("alkawn_data").select("data").eq("user_id",user.id).maybeSingle();
+   const {data,error}=await supabaseClient.from("alkawn_data").select("data,updated_at").eq("user_id",user.id).maybeSingle();
    if(error)throw error;
    if(data&&data.data){
      db=data.data;
      migrateData();
      localStorage.setItem(KEY,JSON.stringify(db));
+     cloudVersion=data.updated_at;cloudDirty=false;
      cloudReady=true;
      showApp();
      populateSelectors();populateStudentFilters();renderAttendance();renderStudents();renderProgramsLabels();renderClasses();
@@ -228,9 +293,12 @@ supabaseClient.auth.onAuthStateChange((event,session)=>{
    if(session?.user){
      if(currentUser&&currentUser.id===session.user.id){currentUser=session.user;return}
      initializeCloudUser(session.user);
-   }else{cloudReady=false;currentUser=null;showAuth()}
+   }else{cloudReady=false;currentUser=null;cloudVersion=null;showAuth()}
  },0);
 });
+document.addEventListener("visibilitychange",checkForCloudUpdates);
+window.addEventListener("focus",checkForCloudUpdates);
+setInterval(checkForCloudUpdates,60000);
 function migrateData(){
  db.students=Array.isArray(db.students)?db.students:[];db.classes=Array.isArray(db.classes)?db.classes:[];db.attendance=Array.isArray(db.attendance)?db.attendance:[];
  db.programs=Array.isArray(db.programs)?db.programs:[];
