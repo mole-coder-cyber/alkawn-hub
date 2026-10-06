@@ -100,7 +100,8 @@ dialog{border:0;border-radius:13px;padding:0;width:min(560px,calc(100% - 24px));
   </section>
 
   <section id="classes" class="view">
-    <div class="row" style="margin-bottom:14px"><div><h1>Classes</h1><div class="muted">Recurring classes and their default student lists.</div></div><button class="btn primary" onclick="openClass()">+ Class</button></div>
+    <div class="row" style="margin-bottom:14px"><div><h1>Classes</h1><div class="muted">Recurring and once-off classes, and their default student lists.</div></div><button class="btn primary" onclick="openClass()">+ Class</button></div>
+    <input id="classSearch" placeholder="Search classes..." oninput="renderClasses()" style="margin-bottom:12px">
     <div id="classesArea" class="list"></div>
   </section>
 
@@ -440,9 +441,22 @@ function showView(v){document.querySelectorAll(".view").forEach(x=>x.classList.r
 
 function refresh(v){if(v==="attendance"){populateSelectors();renderAttendance()}if(v==="students"){populateStudentFilters();renderStudents()}if(v==="programs")renderProgramsLabels();if(v==="classes")renderClasses();if(v==="history"){populateHistorySelectors();renderHistory()}}
 function weekdayForDate(date){return new Date(date+"T12:00:00").toLocaleDateString(undefined,{weekday:"long"})}
+function classType(c){return c&&c.type==="once"?"once":"recurring"}
+function fmtClassDate(d){return d?new Date(d+"T12:00:00").toLocaleDateString(undefined,{weekday:"short",day:"numeric",month:"short",year:"numeric"}):""}
+function classDaysList(c){return Array.isArray(c.days)?c.days:(c.day?[c.day]:[])}
+function classScheduleText(c){
+ const t=c.time?" · "+c.time:"";
+ if(classType(c)==="once")return (c.date?fmtClassDate(c.date):"No date set")+t;
+ return classDaysList(c).join(", ")+t;
+}
+function classTypeBadge(c){
+ return classType(c)==="once"
+  ?'<span class="badge" style="background:#fff1cc;color:#8a5a00">Once-off</span>'
+  :'<span class="badge" style="background:#e3edf4;color:#315f78">Recurring</span>';
+}
 function scheduledClassesForDate(date){
  let day=weekdayForDate(date);
- return db.classes.filter(c=>Array.isArray(c.days)?c.days.includes(day):c.day===day);
+ return db.classes.filter(c=>classType(c)==="once"?c.date===date:(Array.isArray(c.days)?c.days.includes(day):c.day===day));
 }
 function classHasRecordForDate(c,date){
  return !!db.attendance.find(r=>r.date===date&&(r.classId===c.id||r.className===c.name));
@@ -462,7 +476,7 @@ function populateSelectors(){
  c.innerHTML=classes.length?classes.map(x=>`<option value="${x.id}">${esc(x.name)}${x.time?" — "+esc(x.time):""}</option>`).join(""):`<option value="">No class scheduled for this day</option>`;
  if(old&&classes.some(x=>x.id===old))c.value=old;else if(classes[0])c.value=classes[0].id;else c.value="";
  let when=date>today()?"future":date===today()?"today":"past";
- $("attDateNote").textContent=classes.length?`Classes for ${weekdayForDate(date)}.`:`No recurring classes are scheduled for ${weekdayForDate(date)}.`;
+ $("attDateNote").textContent=classes.length?`Classes for ${weekdayForDate(date)}.`:`No classes are scheduled for ${weekdayForDate(date)}.`;
 }
 function attendanceDateChanged(){populateSelectors();renderAttendance()}
 function openQuickSession(){showView("attendance");$("attDate").value=today();populateSelectors();renderAttendance()}
@@ -644,19 +658,40 @@ function classStudentMatches(s,programFilter,labelFilter,query){let labels=s.lab
 function openClass(id=""){
  let c=db.classes.find(x=>x.id===id)||{name:"",days:[],day:"",time:"",notes:"",studentIds:[],programId:"",listMode:"manual",defaultLabelId:""};
  let days=Array.isArray(c.days)?c.days:(c.day?[c.day]:[]);
+ let ctype=classType(c);
  let activeStudents=db.students.filter(s=>s.active);
  let opts=activeStudents.map(s=>`<label class="class-student-row" data-student-name="${esc(s.name.toLowerCase())}" data-program-id="${esc(s.programId||"")}" data-label-ids="${esc((s.labelIds||[]).join(","))}"><input class="classStudent" type="checkbox" value="${s.id}" ${c.studentIds.includes(s.id)?"checked":""} onchange="updateClassStudentCount()"> <span>${esc(s.name)}</span></label>`).join("")||'<div class="muted small">Add active students first.</div>';
- openModal(`<h2>${id?"Edit":"Add"} Recurring Class</h2><label>Class name</label><input id="cName" value="${esc(c.name)}" placeholder="e.g. Private Lesson"><div class="grid two"><div><label>Program</label><select id="cProgram" onchange="refreshClassStudentFilters()"></select></div><div><label>Time</label><input id="cTime" type="time" value="${esc(c.time)}"></div></div><label>Days</label><div id="cDays" class="day-checks">${["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"].map(x=>`<label class="day-check"><input type="checkbox" class="classDay" value="${x}" ${days.includes(x)?"checked":""}> <span>${x}</span></label>`).join("")}</div><label>Default student list</label><select id="cListMode" onchange="toggleClassLabelMode()"><option value="manual" ${c.listMode!=="label"?"selected":""}>Manual Student List</option><option value="label" ${c.listMode==="label"?"selected":""}>Label Default List</option></select><div id="classLabelMode" style="display:${c.listMode==="label"?"block":"none"}"><label>Default label</label><select id="cDefaultLabel" onchange="applyDefaultLabel()"></select><div class="small muted" style="margin-top:5px">Students with this label are automatically included, and you can still edit the list below.</div></div><label>Find students</label><div class="class-filter-row"><input id="classStudentSearch" placeholder="Search students..." oninput="filterClassStudents()"><select id="classStudentProgramFilter" onchange="filterClassStudents()"></select><select id="classStudentLabelFilter" onchange="filterClassStudents()"></select></div><div id="classStudentList" class="class-student-list">${opts}</div><div id="classStudentCount" class="small muted" style="margin-top:7px">${c.studentIds.length} selected</div><label>Notes</label><textarea id="cNotes">${esc(c.notes||"")}</textarea><div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveClass('${id}')">Save Class</button></div>`);
+ openModal(`<h2>${id?"Edit":"Add"} Class</h2><label>Class name</label><input id="cName" value="${esc(c.name)}" placeholder="e.g. Private Lesson"><label>Class type</label><select id="cType" onchange="toggleClassType()"><option value="recurring" ${ctype!=="once"?"selected":""}>Recurring (repeats every week)</option><option value="once" ${ctype==="once"?"selected":""}>Once-off (a single date)</option></select><div class="grid two"><div><label>Program</label><select id="cProgram" onchange="refreshClassStudentFilters()"></select></div><div><label>Time</label><input id="cTime" type="time" value="${esc(c.time)}"></div></div><div id="cDaysWrap" style="display:${ctype==='once'?'none':'block'}"><label>Days</label><div id="cDays" class="day-checks">${["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"].map(x=>`<label class="day-check"><input type="checkbox" class="classDay" value="${x}" ${days.includes(x)?"checked":""}> <span>${x}</span></label>`).join("")}</div></div><div id="cDateWrap" style="display:${ctype==='once'?'block':'none'}"><label>Date</label><input id="cDate" type="date" value="${esc(c.date||"")}"></div><label>Default student list</label><select id="cListMode" onchange="toggleClassLabelMode()"><option value="manual" ${c.listMode!=="label"?"selected":""}>Manual Student List</option><option value="label" ${c.listMode==="label"?"selected":""}>Label Default List</option></select><div id="classLabelMode" style="display:${c.listMode==="label"?"block":"none"}"><label>Default label</label><select id="cDefaultLabel" onchange="applyDefaultLabel()"></select><div class="small muted" style="margin-top:5px">Students with this label are automatically included, and you can still edit the list below.</div></div><label>Find students</label><div class="class-filter-row"><input id="classStudentSearch" placeholder="Search students..." oninput="filterClassStudents()"><select id="classStudentProgramFilter" onchange="filterClassStudents()"></select><select id="classStudentLabelFilter" onchange="filterClassStudents()"></select></div><div id="classStudentList" class="class-student-list">${opts}</div><div id="classStudentCount" class="small muted" style="margin-top:7px">${c.studentIds.length} selected</div><label>Notes</label><textarea id="cNotes">${esc(c.notes||"")}</textarea><div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveClass('${id}')">Save Class</button></div>`);
  populateProgramSelect("cProgram",c.programId,false);populateProgramSelect("classStudentProgramFilter",c.programId,true);populateLabelSelect("classStudentLabelFilter","",true,c.programId);populateLabelSelect("cDefaultLabel",c.defaultLabelId,false,c.programId);refreshClassStudentFilters();if(c.listMode==="label")applyDefaultLabel();else updateClassStudentCount();
 }
+function toggleClassType(){let once=$("cType").value==="once";$("cDaysWrap").style.display=once?"none":"block";$("cDateWrap").style.display=once?"block":"none"}
 function updateClassStudentCount(){let n=document.querySelectorAll('#classStudentList .classStudent:checked').length;if($('classStudentCount'))$('classStudentCount').textContent=`${n} selected`}
 function applyDefaultLabel(){if(!$("cProgram")?.value)return;let id=$("cDefaultLabel")?.value||"";if(!id)return;document.querySelectorAll('#classStudentList .classStudent').forEach(cb=>{let row=cb.closest('.class-student-row'),labels=(row.dataset.labelIds||'').split(',').filter(Boolean);if(labels.includes(id))cb.checked=true});updateClassStudentCount();filterClassStudents()}
 function toggleClassLabelMode(){let mode=$("cListMode").value,box=$("classLabelMode");box.style.display=mode==="label"?"block":"none";if(mode==="label")applyDefaultLabel()}
 function refreshClassStudentFilters(){let p=$("cProgram")?.value||"";if($("classStudentProgramFilter"))$("classStudentProgramFilter").value=p;let l=$("classStudentLabelFilter")?.value||"",d=$("cDefaultLabel")?.value||"";populateLabelSelect("classStudentLabelFilter",l,true,p);populateLabelSelect("cDefaultLabel",d,false,p);if($("classStudentLabelFilter")&&!labelsForProgram(p).some(x=>x.id===$("classStudentLabelFilter").value))$("classStudentLabelFilter").value="";if($("cDefaultLabel")&&!labelsForProgram(p).some(x=>x.id===$("cDefaultLabel").value))$("cDefaultLabel").value="";filterClassStudents()}
 function filterClassStudents(){let q=($("classStudentSearch")?.value||"").toLowerCase().trim(),p=$("classStudentProgramFilter")?.value||"",l=$("classStudentLabelFilter")?.value||"";document.querySelectorAll('#classStudentList .class-student-row').forEach(row=>{let labels=(row.dataset.labelIds||'').split(',').filter(Boolean);let name=(row.dataset.studentName||'');row.style.display=(!q||name.includes(q))&&(!p||row.dataset.programId===p)&&(!l||labels.includes(l))?'flex':'none'});updateClassStudentCount()}
-function saveClass(id){let name=$("cName").value.trim();if(!name){alert("Enter a class name.");return}let days=[...document.querySelectorAll(".classDay:checked")].map(x=>x.value);if(!days.length){alert("Select at least one day.");return}let studentIds=[...document.querySelectorAll(".classStudent:checked")].map(x=>x.value);let obj={name,days,day:days[0],time:$("cTime").value,studentIds,notes:$("cNotes").value,programId:$("cProgram").value,listMode:$("cListMode").value,defaultLabelId:$("cDefaultLabel").value};if(id)Object.assign(db.classes.find(x=>x.id===id),obj);else db.classes.push({id:uid(),...obj});save();closeModal();populateSelectors();renderClasses();toast("Class saved")}
+function saveClass(id){let name=$("cName").value.trim();if(!name){alert("Enter a class name.");return}let type=$("cType").value==="once"?"once":"recurring",date="",days=[];if(type==="once"){date=$("cDate").value;if(!date){alert("Choose the date for this once-off class.");return}}else{days=[...document.querySelectorAll(".classDay:checked")].map(x=>x.value);if(!days.length){alert("Select at least one day.");return}}let studentIds=[...document.querySelectorAll(".classStudent:checked")].map(x=>x.value);let obj={name,type,date,days,day:days[0]||"",time:$("cTime").value,studentIds,notes:$("cNotes").value,programId:$("cProgram").value,listMode:$("cListMode").value,defaultLabelId:$("cDefaultLabel").value};if(id)Object.assign(db.classes.find(x=>x.id===id),obj);else db.classes.push({id:uid(),...obj});save();closeModal();populateSelectors();renderClasses();toast("Class saved")}
+function classSearchText(c){
+ let p=programById(c.programId),label=labelById(c.defaultLabelId);
+ return [c.name,p&&p.name,label&&label.name,classType(c)==="once"?"once-off once off one time":"recurring weekly",classScheduleText(c),c.date,c.notes].filter(Boolean).join(" ").toLowerCase();
+}
 function renderClasses(){
- $("classesArea").innerHTML=db.classes.length?db.classes.map(c=>{let p=programById(c.programId),label=labelById(c.defaultLabelId);return `<div class="card"><div class="row"><div><h2>${esc(c.name)}</h2><div class="muted">${esc((Array.isArray(c.days)?c.days:(c.day?[c.day]:[])).join(", "))}${c.time?" · "+esc(c.time):""} · ${c.studentIds.length} default students</div><div class="small" style="margin-top:6px">${p?`<span class="badge pending">${esc(p.name)}</span>`:""} ${c.listMode==="label"&&label?`<span class="badge present">Label: ${esc(label.name)}</span>`:""}</div></div><div class="actions"><button class="btn" onclick="openClass('${c.id}')">Edit</button><button class="btn primary" onclick="openClassAttendance('${c.id}')">Take Attendance</button><button class="btn danger" onclick="confirmDeleteClass('${c.id}')">Delete</button></div></div><div class="small muted" style="margin-top:8px">${c.studentIds.map(id=>esc(db.students.find(s=>s.id===id)?.name||"Unknown")).join(", ")||"No students assigned yet."}</div></div>`}).join(""):`<div class="card empty">No classes yet. Create a recurring class and choose its default students.</div>`
+ const q=($("classSearch")?.value||"").toLowerCase().trim();
+ const sorted=db.classes.slice().sort((a,b)=>String(a.name||"").localeCompare(String(b.name||""),undefined,{sensitivity:"base",numeric:true}));
+ const list=q?sorted.filter(c=>classSearchText(c).includes(q)):sorted;
+ $("classesArea").innerHTML=list.length?list.map(c=>{let p=programById(c.programId),label=labelById(c.defaultLabelId);return `<div class="card"><div class="row"><div style="cursor:pointer;flex:1" onclick="classProfile('${c.id}')" title="Open class profile"><h2>${esc(c.name)}</h2><div class="muted">${esc(classScheduleText(c))} · ${c.studentIds.length} default students</div><div class="small" style="margin-top:6px">${classTypeBadge(c)} ${p?`<span class="badge pending">${esc(p.name)}</span>`:""} ${c.listMode==="label"&&label?`<span class="badge present">Label: ${esc(label.name)}</span>`:""}</div></div><div class="actions"><button class="btn" onclick="openClass('${c.id}')">Edit</button><button class="btn primary" onclick="openClassAttendance('${c.id}')">Take Attendance</button><button class="btn danger" onclick="confirmDeleteClass('${c.id}')">Delete</button></div></div><div class="small muted" style="margin-top:8px">${c.studentIds.map(id=>esc(db.students.find(s=>s.id===id)?.name||"Unknown")).join(", ")||"No students assigned yet."}</div></div>`}).join(""):(db.classes.length?`<div class="card empty">No classes match "${esc(q)}".</div>`:`<div class="card empty">No classes yet. Create a class and choose its default students.</div>`)
+}
+function classProfile(id){
+ let c=db.classes.find(x=>x.id===id);if(!c)return;
+ let p=programById(c.programId),label=labelById(c.defaultLabelId),once=classType(c)==="once";
+ let names=(c.studentIds||[]).map(sid=>db.students.find(s=>s.id===sid)).filter(Boolean).map(s=>s.name).sort((a,b)=>a.localeCompare(b));
+ let sessions=recordedSessionsForClass(id,""),last=sessions.length?sessions[sessions.length-1].date:"";
+ let when=once?(c.date?fmtClassDate(c.date)+(c.date<today()?" (past)":""):"No date set"):(classDaysList(c).length?"Every "+classDaysList(c).join(", "):"No days set");
+ openModal(`<div class="row"><div><h2>${esc(c.name)}</h2><div style="margin-top:6px">${classTypeBadge(c)} ${p?`<span class="badge pending">${esc(p.name)}</span>`:""} ${c.listMode==="label"&&label?`<span class="badge present">Label: ${esc(label.name)}</span>`:""}</div></div><button class="btn" onclick="closeModal();openClass('${id}')">Edit</button></div>
+ <div class="grid two" style="margin:14px 0"><div class="card"><div class="stat-label">Class type</div><div><b>${once?"Once-off":"Recurring"}</b></div></div><div class="card"><div class="stat-label">${once?"Date":"Days"}</div><div><b>${esc(when)}</b></div></div><div class="card"><div class="stat-label">Time</div><div><b>${c.time?esc(c.time):"Not set"}</b></div></div><div class="card"><div class="stat-label">Sessions recorded</div><div><b>${sessions.length}</b>${last?` <span class="small muted">· last ${esc(fmtClassDate(last))}</span>`:""}</div></div></div>
+ <h3>Default students (${names.length})</h3><div class="small muted" style="margin:4px 0 12px">${names.map(esc).join(", ")||"No students assigned yet."}</div>
+ ${c.notes?`<h3>Notes</h3><div class="small muted" style="margin:4px 0 12px">${esc(c.notes)}</div>`:""}
+ <div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Close</button><button class="btn primary" onclick="closeModal();openClassAttendance('${id}')">Take Attendance</button></div>`);
 }
 
 function confirmDeleteClass(id){
@@ -669,7 +704,7 @@ function deleteClass(id){
  db.classes=db.classes.filter(x=>x.id!==id);
  save();closeModal();populateSelectors();renderClasses();renderAttendance();toast("Class deleted")
 }
-function openClassAttendance(id){showView("attendance");$("attClass").value=id;$("attDate").value=today();renderAttendance()}
+function openClassAttendance(id){let c=db.classes.find(x=>x.id===id);showView("attendance");$("attDate").value=(c&&classType(c)==="once"&&c.date)?c.date:today();populateSelectors();$("attClass").value=id;renderAttendance()}
 
 function recordedSessionsForClass(classId,month=""){
  let c=db.classes.find(x=>x.id===classId);
