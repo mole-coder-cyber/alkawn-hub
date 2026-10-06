@@ -47,7 +47,7 @@ dialog{border:0;border-radius:13px;padding:0;width:min(560px,calc(100% - 24px));
 <header>
   <div class="brand">Alkawn Hub <small>Attendance</small></div>
   <div class="header-actions">
-    <button onclick="exportData()">Backup</button>
+    <button onclick="backupNow()" title="Save a backup file. On Chrome/Edge it always overwrites the same file.">Backup</button>
     <button onclick="document.getElementById('importFile').click()">Restore</button>
     <button onclick="signOut()">Log Out</button>
     <input id="importFile" type="file" accept=".json" hidden onchange="importData(event)">
@@ -225,6 +225,7 @@ async function saveCloudData(){
    cloudVersion=res.data[0].updated_at;
    cloudBaseData=cloneData(db);
    if(seq===cloudChangeSeq)cloudDirty=false;
+   scheduleAutoBackup();
  }catch(e){
    console.error("Cloud save error:",e);
    toast("Cloud save failed: "+(e.message||e));
@@ -707,6 +708,61 @@ function renderHistory(){
 
 function exportData(){
  let blob=new Blob([JSON.stringify(db,null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="alkawn-attendance-backup-"+today()+".json";a.click();URL.revokeObjectURL(a.href);toast("Backup downloaded")}
+// ===== One-file backup: Chrome/Edge keep overwriting the same file; other browsers download a normal file =====
+const BACKUP_FILE_NAME="Alkawn-Hub-backup.json";
+let backupHandle=null,autoBackupTimer=null;
+function idbOpen(){return new Promise((res,rej)=>{const r=indexedDB.open("alkawnBackup",1);r.onupgradeneeded=()=>r.result.createObjectStore("kv");r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
+async function idbGet(k){const d=await idbOpen();return new Promise((res,rej)=>{const t=d.transaction("kv").objectStore("kv").get(k);t.onsuccess=()=>res(t.result);t.onerror=()=>rej(t.error)})}
+async function idbSet(k,v){const d=await idbOpen();return new Promise((res,rej)=>{const t=d.transaction("kv","readwrite");t.objectStore("kv").put(v,k);t.oncomplete=()=>res();t.onerror=()=>rej(t.error)})}
+async function getBackupHandle(){
+ if(backupHandle)return backupHandle;
+ try{backupHandle=(await idbGet("handle"))||null}catch(e){backupHandle=null}
+ return backupHandle;
+}
+async function writeBackupFile(handle){
+ const w=await handle.createWritable();
+ await w.write(JSON.stringify(db,null,2));
+ await w.close();
+}
+async function backupNow(forcePick){
+ if(!window.showSaveFilePicker){exportData();return}
+ try{
+   let h=forcePick?null:await getBackupHandle();
+   if(h){
+     let perm=await h.queryPermission({mode:"readwrite"});
+     if(perm!=="granted")perm=await h.requestPermission({mode:"readwrite"});
+     if(perm!=="granted")h=null;
+   }
+   if(!h){
+     h=await window.showSaveFilePicker({suggestedName:BACKUP_FILE_NAME,types:[{description:"Alkawn Hub backup",accept:{"application/json":[".json"]}}]});
+     backupHandle=h;
+     await idbSet("handle",h);
+   }
+   try{await writeBackupFile(h)}
+   catch(err){
+     if(!forcePick){backupHandle=null;try{await idbSet("handle",null)}catch(x){};return backupNow(true)}
+     throw err;
+   }
+   toast("Backup saved to "+h.name+" ("+new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})+")");
+ }catch(e){
+   if(e&&e.name==="AbortError")return; // you closed the save window
+   console.error("Backup error:",e);
+   exportData();
+ }
+}
+async function autoBackup(){
+ try{
+   if(!window.showSaveFilePicker)return;
+   const h=await getBackupHandle();
+   if(!h)return;
+   if((await h.queryPermission({mode:"readwrite"}))!=="granted")return; // never pop up a prompt on its own
+   await writeBackupFile(h);
+ }catch(e){console.error("Automatic backup skipped:",e)}
+}
+function scheduleAutoBackup(){
+ clearTimeout(autoBackupTimer);
+ autoBackupTimer=setTimeout(autoBackup,30000); // 30 seconds after your last change
+}
 function importData(e){
  let f=e.target.files[0];if(!f)return;let reader=new FileReader();reader.onload=()=>{try{let x=JSON.parse(reader.result);if(!Array.isArray(x.students)||!Array.isArray(x.classes)||!Array.isArray(x.attendance))throw Error();db=x;save();location.reload()}catch{alert("That file does not look like an Alkawn Attendance backup.")}};reader.readAsText(f);e.target.value=""}
 
