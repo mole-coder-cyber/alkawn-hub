@@ -129,6 +129,7 @@ let cloudReady=false;
 let cloudSaveTimer=null;
 let cloudSaving=false;
 let cloudVersion=null;      // updated_at of the cloud row this device last loaded/saved
+let cloudBaseData=null;     // copy of the data this device last loaded/saved; used to merge concurrent edits
 let cloudDirty=false;       // true while this device has changes not yet saved to the cloud
 let cloudChangeSeq=0;
 let cloudConflict=false;
@@ -148,6 +149,60 @@ function scheduleCloudSave(){
  cloudSaveTimer=setTimeout(()=>saveCloudData(),500);
 }
 let cloudSaveQueued=false;
+function cloneData(x){
+ try{return JSON.parse(JSON.stringify(x))}catch{return x}
+}
+function sameData(a,b){
+ try{return JSON.stringify(a)===JSON.stringify(b)}catch{return a===b}
+}
+function arrayKey(x){
+ if(x&&typeof x==="object"){
+   if(x.id!==undefined)return "id:"+x.id;
+   if(x.studentId!==undefined)return "studentId:"+x.studentId;
+ }
+ return null;
+}
+function mergeThreeWay(base,local,remote,conflicts=[]){
+ if(sameData(local,base))return cloneData(remote);
+ if(sameData(remote,base))return cloneData(local);
+ if(sameData(local,remote))return cloneData(local);
+ if(Array.isArray(base)||Array.isArray(local)||Array.isArray(remote)){
+   const ba=Array.isArray(base)?base:[],la=Array.isArray(local)?local:[],ra=Array.isArray(remote)?remote:[];
+   const keyed=[...ba,...la,...ra].every(x=>arrayKey(x)!==null);
+   if(!keyed){
+     const prim=x=>x===null||["string","number","boolean"].includes(typeof x);
+     if([...ba,...la,...ra].every(prim)){
+       // set-style merge: keep the cloud list, drop what this device removed, add what this device added
+       const inB=v=>ba.includes(v),inL=v=>la.includes(v),inR=v=>ra.includes(v);
+       const merged=ra.filter(v=>!(inB(v)&&!inL(v)));
+       la.forEach(v=>{if(!inB(v)&&!inR(v)&&!merged.includes(v))merged.push(v)});
+       return merged;
+     }
+     conflicts.push({local,remote});
+     return cloneData(remote);
+   }
+   const keys=[...new Set([...ba,...la,...ra].map(arrayKey))];
+   const out=[];
+   for(const key of keys){
+     const b=ba.find(x=>arrayKey(x)===key),l=la.find(x=>arrayKey(x)===key),r=ra.find(x=>arrayKey(x)===key);
+     const merged=mergeThreeWay(b,l,r,conflicts);
+     if(merged!==undefined)out.push(merged);
+   }
+   return out;
+ }
+ if(base&&typeof base==="object"&&local&&typeof local==="object"&&remote&&typeof remote==="object"){
+   const out={};
+   const keys=new Set([...Object.keys(base),...Object.keys(local),...Object.keys(remote)]);
+   for(const key of keys){
+     const merged=mergeThreeWay(base[key],local[key],remote[key],conflicts);
+     if(merged!==undefined)out[key]=merged;
+   }
+   return out;
+ }
+ // Both sides changed the same simple value. Keep the newer cloud value so the two devices converge.
+ if(!sameData(local,remote))conflicts.push({local,remote});
+ return cloneData(remote);
+}
 async function saveCloudData(){
  if(!cloudReady||!currentUser||cloudConflict)return;
  if(cloudSaving){cloudSaveQueued=true;return}
@@ -163,11 +218,12 @@ async function saveCloudData(){
      res=await supabaseClient.from("alkawn_data").insert({user_id:currentUser.id,data:db,updated_at:now}).select("updated_at");
    }
    if(res.error){
-     if(!cloudVersion&&res.error.code==="23505"){handleCloudConflict();return}
+     if(!cloudVersion&&res.error.code==="23505"){await handleCloudConflict();return}
      throw res.error;
    }
-   if(!res.data||!res.data.length){handleCloudConflict();return}
+   if(!res.data||!res.data.length){await handleCloudConflict();return}
    cloudVersion=res.data[0].updated_at;
+   cloudBaseData=cloneData(db);
    if(seq===cloudChangeSeq)cloudDirty=false;
  }catch(e){
    console.error("Cloud save error:",e);
@@ -177,15 +233,37 @@ async function saveCloudData(){
    if(cloudSaveQueued&&!cloudConflict){cloudSaveQueued=false;scheduleCloudSave()}
  }
 }
-function handleCloudConflict(){
- // Another device saved newer data. Do NOT overwrite it. Keep a backup of this device's changes, then load the latest cloud data.
+async function handleCloudConflict(){
+ // Another device saved newer data. Merge this device's changes into the newer cloud copy instead of throwing them away.
  cloudConflict=true;
  clearTimeout(cloudSaveTimer);
  cloudSaveQueued=false;
- try{exportData()}catch(e){console.error(e)}
- alert("Another device saved newer data to the cloud.\n\nYour latest changes on THIS device were NOT saved. A backup file of this device's data has just been downloaded so nothing is lost.\n\nThe app will now load the latest cloud data.");
- cloudConflict=false;
- refreshFromCloud(true);
+ try{
+   const {data,error}=await supabaseClient.from("alkawn_data").select("data,updated_at").eq("user_id",currentUser.id).maybeSingle();
+   if(error)throw error;
+   if(!data||!data.data){cloudConflict=false;return}
+   const conflicts=[];
+   const localBeforeMerge=cloneData(db);
+   db=mergeThreeWay(cloudBaseData||{},db,data.data,conflicts);
+   migrateData();
+   localStorage.setItem(KEY,JSON.stringify(db));
+   cloudVersion=data.updated_at;
+   cloudBaseData=cloneData(data.data);
+   cloudConflict=false;
+   cloudDirty=true;
+   populateSelectors();populateStudentFilters();renderAttendance();renderStudents();renderProgramsLabels();renderClasses();
+   if(conflicts.length){
+     try{const mergedDb=db;db=localBeforeMerge;exportData();db=mergedDb}catch(e){console.error(e)}
+     alert("Another device changed some of the same information at the same time.\n\nThe newer cloud value was kept for those specific conflicts, while changes that did not conflict were merged. A backup of this device's pre-merge data was downloaded.");
+   }else{
+     toast("Changes from both devices were merged");
+   }
+   await saveCloudData();
+ }catch(e){
+   console.error("Cloud conflict merge error:",e);
+   cloudConflict=false;
+   toast("Could not merge cloud changes: "+(e.message||e));
+ }
 }
 async function refreshFromCloud(showToast){
  if(!currentUser)return;
@@ -197,6 +275,7 @@ async function refreshFromCloud(showToast){
      migrateData();
      localStorage.setItem(KEY,JSON.stringify(db));
      cloudVersion=data.updated_at;
+     cloudBaseData=cloneData(data.data);
      cloudDirty=false;
      populateSelectors();populateStudentFilters();renderAttendance();renderStudents();renderProgramsLabels();renderClasses();
      if(showToast)toast("Updated with the latest cloud data");
@@ -261,7 +340,7 @@ async function initializeCloudUser(user){
      db=data.data;
      migrateData();
      localStorage.setItem(KEY,JSON.stringify(db));
-     cloudVersion=data.updated_at;cloudDirty=false;
+     cloudVersion=data.updated_at;cloudBaseData=cloneData(db);cloudDirty=false;
      cloudReady=true;
      showApp();
      populateSelectors();populateStudentFilters();renderAttendance();renderStudents();renderProgramsLabels();renderClasses();
@@ -271,10 +350,12 @@ async function initializeCloudUser(user){
      const useLocal=hasAlkawnData(db)?confirm("No cloud data exists for this account. Upload the Alkawn data currently on this device to the cloud?"):true;
      if(useLocal){
        cloudReady=true;
+       cloudBaseData=null;
        await saveCloudData();
      }else{
        db={students:[],classes:[],attendance:[],programs:[]};
        cloudReady=true;
+       cloudBaseData=null;
        await saveCloudData();
      }
      showApp();
@@ -298,7 +379,8 @@ supabaseClient.auth.onAuthStateChange((event,session)=>{
 });
 document.addEventListener("visibilitychange",checkForCloudUpdates);
 window.addEventListener("focus",checkForCloudUpdates);
-setInterval(checkForCloudUpdates,60000);
+// Check regularly so two open laptops normally catch up without a manual refresh.
+setInterval(checkForCloudUpdates,10000);
 function migrateData(){
  db.students=Array.isArray(db.students)?db.students:[];db.classes=Array.isArray(db.classes)?db.classes:[];db.attendance=Array.isArray(db.attendance)?db.attendance:[];
  db.programs=Array.isArray(db.programs)?db.programs:[];
