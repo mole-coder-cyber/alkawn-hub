@@ -12,7 +12,8 @@
 button,input,select,textarea{font:inherit}button{cursor:pointer}.app{min-height:100vh}
 header{position:sticky;top:0;z-index:5;background:var(--text);color:#fff;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px}
 .brand{font-weight:800;font-size:19px}.brand small{display:block;font-size:11px;font-weight:500;opacity:.7}
-.header-actions{display:flex;gap:7px;flex-wrap:wrap}header button{background:#ffffff16;color:#fff;border:1px solid #ffffff30;border-radius:8px;padding:8px 11px}
+.header-actions{display:flex;gap:7px;flex-wrap:wrap}
+.status-text{align-self:center;font-size:12px;color:#8e99a6;margin-right:4px;opacity:0;transition:opacity .35s;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.status-text.show{opacity:1}header button{background:#ffffff16;color:#fff;border:1px solid #ffffff30;border-radius:8px;padding:8px 11px}
 main{max-width:1050px;margin:auto;padding:18px}.nav{display:flex;gap:7px;overflow:auto;margin-bottom:18px}.nav button{border:1px solid var(--line);background:var(--card);padding:10px 14px;border-radius:9px;white-space:nowrap}.nav button.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 .view{display:none}.view.active{display:block}.grid{display:grid;gap:14px}.grid.two{grid-template-columns:repeat(2,minmax(0,1fr))}.grid.three{grid-template-columns:repeat(3,minmax(0,1fr))}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;box-shadow:var(--shadow)}h1{font-size:24px;margin:0 0 5px}h2{font-size:18px;margin:0 0 12px}h3{font-size:15px;margin:0 0 7px}.muted{color:var(--muted)}.small{font-size:13px}
@@ -24,7 +25,7 @@ label{display:block;font-size:13px;font-weight:650;margin:10px 0 5px}input,selec
 .att-summary{position:sticky;top:80px;z-index:10;background:#fff;box-shadow:0 2px 8px #0001}.student-stats .card{padding:10px}.student-stats .stat{font-size:23px}.student-month-nav{justify-content:center;margin:10px 0 16px}.student-month-nav .month-input{max-width:180px}.att-summary .row{gap:12px}.att-summary-actions{display:flex;align-items:center;gap:14px;flex-wrap:wrap}.summary-count{font-weight:750}.attendance-counts{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;width:100%}.attendance-counts>div{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;line-height:1.05;min-width:82px;padding:7px 12px;border:1px solid var(--line);border-radius:10px;background:#fff}.attendance-counts b{font-size:20px}.attendance-counts span:not(.badge){font-size:12px;color:var(--muted);margin-top:3px}.att-row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;border:1px solid var(--line);border-radius:10px;padding:12px;background:#fff}.att-main{min-width:0}.att-name{font-weight:750}.att-meta{font-size:12px;color:var(--muted)}.att-buttons{display:flex;gap:6px}.att-buttons button{min-width:78px;padding:10px 8px;border-radius:8px;border:1px solid #ccd3d9;background:#fff}.att-buttons button:disabled{opacity:.45;cursor:not-allowed}.month-nav{display:flex;gap:8px;align-items:center}.month-nav .month-input{max-width:180px}.att-buttons .selected-present{background:#e5f6ed;border-color:#7bc79e;color:var(--good);font-weight:800}.att-buttons .selected-absent{background:#fdebea;border-color:#e39b95;color:var(--bad);font-weight:800}
 table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:9px;border-bottom:1px solid var(--line);font-size:14px}th{color:var(--muted);font-size:12px}.empty{text-align:center;padding:28px;color:var(--muted)}
 dialog{border:0;border-radius:13px;padding:0;width:min(560px,calc(100% - 24px));box-shadow:0 15px 50px #0005}dialog::backdrop{background:#0006}.modal{padding:18px}.modal h2{margin-bottom:3px}.toast{position:fixed;right:16px;bottom:16px;background:var(--text);color:#fff;padding:11px 14px;border-radius:9px;box-shadow:0 6px 20px #0003;display:none;z-index:20}.toast.show{display:block}.hidden{display:none!important}.auth-gate{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}.auth-card{width:min(430px,100%);background:#fff;border:1px solid var(--line);border-radius:14px;padding:24px;box-shadow:var(--shadow)}.auth-card h1{margin-bottom:4px}.auth-status{margin-top:10px;padding:10px;border-radius:8px;background:#f4f6f8;font-size:13px}.auth-status.error{background:#fdebea;color:var(--bad)}
-@media(max-width:700px){main{padding:12px}.grid.two,.grid.three{grid-template-columns:1fr}.att-row{grid-template-columns:1fr}.att-buttons button{flex:1}.att-buttons{width:100%}header{align-items:flex-start}.header-actions{justify-content:flex-end}}
+@media(max-width:700px){.status-text{flex-basis:100%;text-align:right;white-space:normal;max-width:none}main{padding:12px}.grid.two,.grid.three{grid-template-columns:1fr}.att-row{grid-template-columns:1fr}.att-buttons button{flex:1}.att-buttons{width:100%}header{align-items:flex-start}.header-actions{justify-content:flex-end}}
 </style>
 </head>
 <body>
@@ -47,6 +48,7 @@ dialog{border:0;border-radius:13px;padding:0;width:min(560px,calc(100% - 24px));
 <header>
   <div class="brand">Alkawn Hub <small>Attendance</small></div>
   <div class="header-actions">
+    <span id="statusText" class="status-text" aria-live="polite"></span>
     <button onclick="backupNow()" title="Save a backup file. On Chrome/Edge it always overwrites the same file.">Backup</button>
     <button onclick="document.getElementById('importFile').click()">Restore</button>
     <button onclick="signOut()">Log Out</button>
@@ -419,7 +421,16 @@ function populateLabelSelect(id,selected="",includeAll=false,programId=""){let e
 
 function fmt(d){return new Date(d+"T12:00:00").toLocaleDateString(undefined,{day:"numeric",month:"short",year:"numeric"})}
 function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]))}
-function toast(t){let x=$("toast");x.textContent=t;x.classList.add("show");setTimeout(()=>x.classList.remove("show"),1800)}
+let statusTimer=null;
+function toast(t){
+ const x=$("statusText");
+ if(!x){const o=$("toast");if(o){o.textContent=t;o.classList.add("show");setTimeout(()=>o.classList.remove("show"),1800)}return}
+ clearTimeout(statusTimer);
+ x.textContent=t;
+ x.classList.add("show");
+ const long=/fail|could not|error|paused|not saved/i.test(t);
+ statusTimer=setTimeout(()=>x.classList.remove("show"),long?10000:4000);
+}
 function openModal(html){$("modalBody").innerHTML=html;$("modal").showModal()}
 function closeModal(){$("modal").close()}
 $("modal").addEventListener("click",e=>{if(e.target===$("modal"))closeModal()})
@@ -710,7 +721,16 @@ function exportData(){
  let blob=new Blob([JSON.stringify(db,null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="alkawn-attendance-backup-"+today()+".json";a.click();URL.revokeObjectURL(a.href);toast("Backup downloaded")}
 // ===== One-file backup: Chrome/Edge keep overwriting the same file; other browsers download a normal file =====
 const BACKUP_FILE_NAME="Alkawn-Hub-backup.json";
-let backupHandle=null,autoBackupTimer=null;
+let backupHandle=null,autoBackupTimer=null,autoBackupWarned=false;
+function backupCounts(x){
+ const a=(x&&Array.isArray(x.attendance))?x.attendance:[];
+ return{students:((x&&x.students)||[]).length,classes:((x&&x.classes)||[]).length,sessions:a.length,
+        marks:a.reduce((n,r)=>n+((r.records||[]).filter(m=>m.status).length),0)};
+}
+function backupShrinks(n,o){return n.students<o.students||n.classes<o.classes||n.sessions<o.sessions||n.marks<o.marks}
+async function readBackupCounts(handle){
+ try{const f=await handle.getFile();const t=await f.text();if(!t||!t.trim())return null;return backupCounts(JSON.parse(t))}catch(e){return null}
+}
 function idbOpen(){return new Promise((res,rej)=>{const r=indexedDB.open("alkawnBackup",1);r.onupgradeneeded=()=>r.result.createObjectStore("kv");r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
 async function idbGet(k){const d=await idbOpen();return new Promise((res,rej)=>{const t=d.transaction("kv").objectStore("kv").get(k);t.onsuccess=()=>res(t.result);t.onerror=()=>rej(t.error)})}
 async function idbSet(k,v){const d=await idbOpen();return new Promise((res,rej)=>{const t=d.transaction("kv","readwrite");t.objectStore("kv").put(v,k);t.oncomplete=()=>res();t.onerror=()=>rej(t.error)})}
@@ -738,11 +758,20 @@ async function backupNow(forcePick){
      backupHandle=h;
      await idbSet("handle",h);
    }
+   const old=await readBackupCounts(h);
+   if(old){
+     const n=backupCounts(db);
+     if(backupShrinks(n,old)&&!confirm("This data has fewer records than the backup file you already have.\n\nNow: "+n.students+" students, "+n.classes+" classes, "+n.sessions+" attendance sessions\nBackup file: "+old.students+" students, "+old.classes+" classes, "+old.sessions+" attendance sessions\n\nReplace the backup with the current (smaller) data?")){
+       toast("Backup not changed");
+       return;
+     }
+   }
    try{await writeBackupFile(h)}
    catch(err){
      if(!forcePick){backupHandle=null;try{await idbSet("handle",null)}catch(x){};return backupNow(true)}
      throw err;
    }
+   autoBackupWarned=false;
    toast("Backup saved to "+h.name+" ("+new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})+")");
  }catch(e){
    if(e&&e.name==="AbortError")return; // you closed the save window
@@ -756,6 +785,11 @@ async function autoBackup(){
    const h=await getBackupHandle();
    if(!h)return;
    if((await h.queryPermission({mode:"readwrite"}))!=="granted")return; // never pop up a prompt on its own
+   const old=await readBackupCounts(h);
+   if(old&&backupShrinks(backupCounts(db),old)){ // never let an automatic backup replace a fuller backup with a smaller one
+     if(!autoBackupWarned){autoBackupWarned=true;toast("Auto-backup paused: fewer records than your backup. Click Backup to confirm.")}
+     return;
+   }
    await writeBackupFile(h);
  }catch(e){console.error("Automatic backup skipped:",e)}
 }
