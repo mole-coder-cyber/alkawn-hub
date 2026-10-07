@@ -833,7 +833,39 @@ function scheduleAutoBackup(){
  autoBackupTimer=setTimeout(autoBackup,30000); // 30 seconds after your last change
 }
 function importData(e){
- let f=e.target.files[0];if(!f)return;let reader=new FileReader();reader.onload=()=>{try{let x=JSON.parse(reader.result);if(!Array.isArray(x.students)||!Array.isArray(x.classes)||!Array.isArray(x.attendance))throw Error();db=x;save();location.reload()}catch{alert("That file does not look like an Alkawn Attendance backup.")}};reader.readAsText(f);e.target.value=""}
+ let f=e.target.files[0];if(!f)return;
+ let reader=new FileReader();
+ reader.onload=async()=>{
+   let x;
+   try{x=JSON.parse(reader.result);if(!Array.isArray(x.students)||!Array.isArray(x.classes)||!Array.isArray(x.attendance))throw Error()}
+   catch{alert("That file does not look like an Alkawn Attendance backup.");return}
+   const n=backupCounts(x),c=backupCounts(db);
+   if(!confirm("Restore this backup?\n\nBackup file: "+n.students+" students, "+n.classes+" classes, "+n.sessions+" attendance sessions\nCurrently in the app: "+c.students+" students, "+c.classes+" classes, "+c.sessions+" attendance sessions\n\nThis REPLACES the data in the cloud and on every device with the backup."))return;
+   await restoreFromBackup(x);
+ };
+ reader.readAsText(f);e.target.value="";
+}
+async function restoreFromBackup(x){
+ const prev=db;
+ try{
+   clearTimeout(cloudSaveTimer);cloudSaveQueued=false;
+   for(let i=0;i<50&&cloudSaving;i++)await new Promise(r=>setTimeout(r,100)); // let any save in progress finish
+   db=x;migrateData();
+   if(cloudReady&&currentUser){
+     // Upload FIRST and wait for it, otherwise the page reload below would load the old cloud copy over the restored data.
+     const {data,error}=await supabaseClient.from("alkawn_data").upsert({user_id:currentUser.id,data:db,updated_at:new Date().toISOString()}).select("updated_at");
+     if(error)throw error;
+     if(data&&data[0])cloudVersion=data[0].updated_at;
+   }
+   cloudBaseData=cloneData(db);cloudDirty=false;
+   localStorage.setItem(KEY,JSON.stringify(db));
+   location.reload();
+ }catch(err){
+   db=prev;
+   console.error("Restore error:",err);
+   alert("The backup could not be saved to the cloud, so nothing was changed.\n\n"+(err.message||err));
+ }
+}
 
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
 $("attDate").value=today();
