@@ -13,7 +13,8 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}.app{min-height:
 header{position:sticky;top:0;z-index:5;background:var(--text);color:#fff;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px}
 .brand{font-weight:800;font-size:19px}.brand small{display:block;font-size:11px;font-weight:500;opacity:.7}
 .header-actions{display:flex;gap:7px;flex-wrap:wrap}
-.status-text{align-self:center;font-size:12px;color:#8e99a6;margin-right:4px;opacity:0;transition:opacity .35s;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.status-text.show{opacity:1}header button{background:#ffffff16;color:#fff;border:1px solid #ffffff30;border-radius:8px;padding:8px 11px}
+.status-text{align-self:center;font-size:12px;color:#8e99a6;margin-right:4px;opacity:0;transition:opacity .35s;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.status-text.show{opacity:1}
+.sync-badge{display:none;align-self:center;font-size:12px;color:#e0a93b;margin-right:4px}header button{background:#ffffff16;color:#fff;border:1px solid #ffffff30;border-radius:8px;padding:8px 11px}
 main{max-width:1050px;margin:auto;padding:18px}.nav{display:flex;gap:7px;overflow:auto;margin-bottom:18px}.nav button{border:1px solid var(--line);background:var(--card);padding:10px 14px;border-radius:9px;white-space:nowrap}.nav button.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 .view{display:none}.view.active{display:block}.grid{display:grid;gap:14px}.grid.two{grid-template-columns:repeat(2,minmax(0,1fr))}.grid.three{grid-template-columns:repeat(3,minmax(0,1fr))}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;box-shadow:var(--shadow)}h1{font-size:24px;margin:0 0 5px}h2{font-size:18px;margin:0 0 12px}h3{font-size:15px;margin:0 0 7px}.muted{color:var(--muted)}.small{font-size:13px}
@@ -25,7 +26,7 @@ label{display:block;font-size:13px;font-weight:650;margin:10px 0 5px}input,selec
 .att-summary{position:sticky;top:80px;z-index:10;background:#fff;box-shadow:0 2px 8px #0001}.student-stats .card{padding:10px}.student-stats .stat{font-size:23px}.student-month-nav{justify-content:center;margin:10px 0 16px}.student-month-nav .month-input{max-width:180px}.att-summary .row{gap:12px}.att-summary-actions{display:flex;align-items:center;gap:14px;flex-wrap:wrap}.summary-count{font-weight:750}.attendance-counts{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;width:100%}.attendance-counts>div{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;line-height:1.05;min-width:82px;padding:7px 12px;border:1px solid var(--line);border-radius:10px;background:#fff}.attendance-counts b{font-size:20px}.attendance-counts span:not(.badge){font-size:12px;color:var(--muted);margin-top:3px}.att-row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;border:1px solid var(--line);border-radius:10px;padding:12px;background:#fff}.att-main{min-width:0}.att-name{font-weight:750}.att-meta{font-size:12px;color:var(--muted)}.att-buttons{display:flex;gap:6px}.att-buttons button{min-width:78px;padding:10px 8px;border-radius:8px;border:1px solid #ccd3d9;background:#fff}.att-buttons button:disabled{opacity:.45;cursor:not-allowed}.month-nav{display:flex;gap:8px;align-items:center}.month-nav .month-input{max-width:180px}.att-buttons .selected-present{background:#e5f6ed;border-color:#7bc79e;color:var(--good);font-weight:800}.att-buttons .selected-absent{background:#fdebea;border-color:#e39b95;color:var(--bad);font-weight:800}
 table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:9px;border-bottom:1px solid var(--line);font-size:14px}th{color:var(--muted);font-size:12px}.empty{text-align:center;padding:28px;color:var(--muted)}
 dialog{border:0;border-radius:13px;padding:0;width:min(560px,calc(100% - 24px));box-shadow:0 15px 50px #0005}dialog::backdrop{background:#0006}.modal{padding:18px}.modal h2{margin-bottom:3px}.toast{position:fixed;right:16px;bottom:16px;background:var(--text);color:#fff;padding:11px 14px;border-radius:9px;box-shadow:0 6px 20px #0003;display:none;z-index:20}.toast.show{display:block}.hidden{display:none!important}.auth-gate{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}.auth-card{width:min(430px,100%);background:#fff;border:1px solid var(--line);border-radius:14px;padding:24px;box-shadow:var(--shadow)}.auth-card h1{margin-bottom:4px}.auth-status{margin-top:10px;padding:10px;border-radius:8px;background:#f4f6f8;font-size:13px}.auth-status.error{background:#fdebea;color:var(--bad)}
-@media(max-width:700px){.status-text{flex-basis:100%;text-align:right;white-space:normal;max-width:none}main{padding:12px}.grid.two,.grid.three{grid-template-columns:1fr}.att-row{grid-template-columns:1fr}.att-buttons button{flex:1}.att-buttons{width:100%}header{align-items:flex-start}.header-actions{justify-content:flex-end}}
+@media(max-width:700px){.sync-badge{flex-basis:100%;text-align:right}.status-text{flex-basis:100%;text-align:right;white-space:normal;max-width:none}main{padding:12px}.grid.two,.grid.three{grid-template-columns:1fr}.att-row{grid-template-columns:1fr}.att-buttons button{flex:1}.att-buttons{width:100%}header{align-items:flex-start}.header-actions{justify-content:flex-end}}
 </style>
 </head>
 <body>
@@ -46,8 +47,9 @@ dialog{border:0;border-radius:13px;padding:0;width:min(560px,calc(100% - 24px));
 </div>
 <div id="app" class="app hidden">
 <header>
-  <div class="brand">Alkawn Hub <small>Attendance · v2026-10-06</small></div>
+  <div class="brand">Alkawn Hub <small>Attendance · v2026-10-07</small></div>
   <div class="header-actions">
+    <span id="syncBadge" class="sync-badge"></span>
     <span id="statusText" class="status-text" aria-live="polite"></span>
     <button onclick="backupNow()" title="Save a backup file. On Chrome/Edge it always overwrites the same file.">Backup</button>
     <button onclick="document.getElementById('importFile').click()">Restore</button>
@@ -137,17 +139,69 @@ let cloudDirty=false;       // true while this device has changes not yet saved 
 let cloudChangeSeq=0;
 let cloudConflict=false;
 let cloudChecking=false;
+let cloudOffline=false;
+let cloudRetryTimer=null;
+let cloudRetryDelay=5000;
+const META_KEY="alkawnSyncMetaV1",BASE_KEY="alkawnSyncBaseV1";
 const KEY="alkawnAttendanceV1";
 let db=load();
 const $=id=>document.getElementById(id);
 const uid=()=>crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36)+Math.random().toString(36).slice(2);
 function load(){try{return JSON.parse(localStorage.getItem(KEY))||{students:[],classes:[],attendance:[]}}catch{return {students:[],classes:[],attendance:[]}}}
+function isNetworkError(e){
+ const m=String((e&&(e.message||e.details))||e||"");
+ return (typeof navigator!=="undefined"&&navigator.onLine===false)||/failed to fetch|networkerror|load failed|network request failed|err_internet|fetch failed/i.test(m);
+}
+function isAuthError(e){
+ const m=String((e&&e.message)||"");
+ return !!e&&(e.status===401||e.code==="PGRST301"||e.code==="PGRST303"||/jwt|not authenticated|invalid.*token|refresh.?token/i.test(m));
+}
+// What this device remembers between visits, so offline edits are never thrown away
+function readSyncMeta(){try{return JSON.parse(localStorage.getItem(META_KEY))||null}catch{return null}}
+function readSyncBase(){try{return JSON.parse(localStorage.getItem(BASE_KEY))}catch{return null}}
+function writeSyncMeta(extra){
+ try{localStorage.setItem(META_KEY,JSON.stringify(Object.assign({userId:currentUser&&currentUser.id||null,dirty:cloudDirty,version:cloudVersion,loggedOut:false},extra||{})))}catch(e){}
+}
+function persistSync(){
+ writeSyncMeta();
+ try{localStorage.setItem(BASE_KEY,JSON.stringify(cloudBaseData||null))}catch(e){}
+}
+function updateSyncBadge(){
+ const b=$("syncBadge");if(!b)return;
+ if(cloudOffline){b.textContent="● Offline – changes will sync when you reconnect";b.style.display="inline"}
+ else b.style.display="none";
+}
+function goOffline(){
+ if(!cloudOffline){cloudOffline=true;toast("Offline — changes are saved on this device and will sync when you reconnect")}
+ updateSyncBadge();
+ clearTimeout(cloudRetryTimer);
+ cloudRetryTimer=setTimeout(()=>{if(cloudDirty&&cloudReady)saveCloudData();else checkForCloudUpdates()},cloudRetryDelay);
+ cloudRetryDelay=Math.min(cloudRetryDelay*2,30000);
+}
+function backOnline(msg){
+ if(!cloudOffline)return;
+ cloudOffline=false;cloudRetryDelay=5000;clearTimeout(cloudRetryTimer);updateSyncBadge();
+ toast(msg||"Back online");
+}
+function renderAll(){populateSelectors();populateStudentFilters();renderAttendance();renderStudents();renderProgramsLabels();renderClasses()}
+async function handleLoginExpired(){
+ try{
+   const {data,error}=await supabaseClient.auth.refreshSession();
+   if(!error&&data&&data.session){clearTimeout(cloudRetryTimer);cloudRetryTimer=setTimeout(()=>saveCloudData(),1000);return}
+ }catch(e){}
+ // Keep everything on this device; logging in again syncs and merges it.
+ writeSyncMeta();
+ cloudReady=false;currentUser=null;
+ showAuth();
+ setAuthStatus("Your login expired. Log in again to sync - your changes on this device are safe and will be merged.",true);
+}
 function save(){
  localStorage.setItem(KEY,JSON.stringify(db));
  if(cloudReady)scheduleCloudSave();
 }
 function scheduleCloudSave(){
  cloudDirty=true;cloudChangeSeq++;
+ writeSyncMeta();
  clearTimeout(cloudSaveTimer);
  cloudSaveTimer=setTimeout(()=>saveCloudData(),500);
 }
@@ -228,10 +282,15 @@ async function saveCloudData(){
    cloudVersion=res.data[0].updated_at;
    cloudBaseData=cloneData(db);
    if(seq===cloudChangeSeq)cloudDirty=false;
+   persistSync();
+   cloudRetryDelay=5000;
+   if(cloudOffline)backOnline("Back online — your changes are synced");
    scheduleAutoBackup();
  }catch(e){
    console.error("Cloud save error:",e);
-   toast("Cloud save failed: "+(e.message||e));
+   if(isNetworkError(e))goOffline();
+   else if(isAuthError(e))handleLoginExpired();
+   else toast("Cloud save failed: "+(e.message||e));
  }finally{
    cloudSaving=false;
    if(cloudSaveQueued&&!cloudConflict){cloudSaveQueued=false;scheduleCloudSave()}
@@ -255,6 +314,7 @@ async function handleCloudConflict(){
    cloudBaseData=cloneData(data.data);
    cloudConflict=false;
    cloudDirty=true;
+   persistSync();
    populateSelectors();populateStudentFilters();renderAttendance();renderStudents();renderProgramsLabels();renderClasses();
    if(conflicts.length){
      try{const mergedDb=db;db=localBeforeMerge;exportData();db=mergedDb}catch(e){console.error(e)}
@@ -266,7 +326,8 @@ async function handleCloudConflict(){
  }catch(e){
    console.error("Cloud conflict merge error:",e);
    cloudConflict=false;
-   toast("Could not merge cloud changes: "+(e.message||e));
+   if(isNetworkError(e))goOffline();
+   else toast("Could not merge cloud changes: "+(e.message||e));
  }
 }
 async function refreshFromCloud(showToast){
@@ -281,12 +342,15 @@ async function refreshFromCloud(showToast){
      cloudVersion=data.updated_at;
      cloudBaseData=cloneData(data.data);
      cloudDirty=false;
+     persistSync();
+     if(cloudOffline)backOnline();
      populateSelectors();populateStudentFilters();renderAttendance();renderStudents();renderProgramsLabels();renderClasses();
      if(showToast)toast("Updated with the latest cloud data");
    }
  }catch(e){
    console.error("Cloud refresh error:",e);
-   toast("Could not refresh from the cloud: "+(e.message||e));
+   if(isNetworkError(e))goOffline();
+   else toast("Could not refresh from the cloud: "+(e.message||e));
  }
 }
 async function checkForCloudUpdates(){
@@ -296,12 +360,14 @@ async function checkForCloudUpdates(){
  cloudChecking=true;
  try{
    const {data,error}=await supabaseClient.from("alkawn_data").select("updated_at").eq("user_id",currentUser.id).maybeSingle();
-   if(error||!data)return;
+   if(error){if(isNetworkError(error))goOffline();return}
+   if(!data)return;
+   if(cloudOffline)backOnline();
    if(data.updated_at!==cloudVersion&&!cloudDirty&&!cloudSaving){
      const m2=$("modal");if(m2&&m2.open)return;
      await refreshFromCloud(true);
    }
- }catch(e){console.error(e)}
+ }catch(e){console.error(e);if(isNetworkError(e))goOffline()}
  finally{cloudChecking=false}
 }
 function hasAlkawnData(x){return !!(x&&((x.students&&x.students.length)||(x.classes&&x.classes.length)||(x.attendance&&x.attendance.length)||(x.programs&&x.programs.length)))}
@@ -331,24 +397,51 @@ async function signUp(){
  if(data.session){setAuthStatus("Account created. Loading Alkawn Hub...")}else setAuthStatus("Account created. Check your email to confirm your account, then log in.");
 }
 async function signOut(){
- await supabaseClient.auth.signOut();
+ writeSyncMeta({loggedOut:true});
+ await supabaseClient.auth.signOut(navigator.onLine===false?{scope:"local"}:undefined);
  cloudReady=false;currentUser=null;cloudVersion=null;showAuth();setAuthStatus("You have been logged out.");
+}
+function startOfflineMode(){
+ migrateData();
+ const meta=readSyncMeta()||{};
+ cloudVersion=meta.version||null;
+ cloudBaseData=readSyncBase();
+ cloudDirty=!!meta.dirty;
+ cloudReady=true;
+ showApp();
+ renderAll();
+ goOffline();
 }
 async function initializeCloudUser(user){
  currentUser=user;
  setAuthStatus("Loading your Alkawn data...");
+ const meta=readSyncMeta();
+ const sameUser=!!(meta&&meta.userId===user.id);
  try{
    const {data,error}=await supabaseClient.from("alkawn_data").select("data,updated_at").eq("user_id",user.id).maybeSingle();
    if(error)throw error;
    if(data&&data.data){
-     db=data.data;
+     let before=null;const conflicts=[];
+     if(sameUser&&meta.dirty&&hasAlkawnData(db)){
+       // This device has edits that never reached the cloud (made offline, or the page closed first):
+       // merge them into the latest cloud copy instead of discarding them.
+       before=cloneData(db);
+       db=mergeThreeWay(readSyncBase()||{},db,data.data,conflicts);
+       cloudDirty=true;
+     }else{db=data.data;cloudDirty=false}
      migrateData();
      localStorage.setItem(KEY,JSON.stringify(db));
-     cloudVersion=data.updated_at;cloudBaseData=cloneData(db);cloudDirty=false;
-     cloudReady=true;
+     cloudVersion=data.updated_at;cloudBaseData=cloneData(data.data);
+     cloudReady=true;cloudOffline=false;updateSyncBadge();persistSync();
      showApp();
-     populateSelectors();populateStudentFilters();renderAttendance();renderStudents();renderProgramsLabels();renderClasses();
-     toast("Cloud data loaded");
+     renderAll();
+     if(before){
+       if(conflicts.length){
+         try{const merged=db;db=before;exportData();db=merged}catch(e){console.error(e)}
+         alert("Changes made on this device while it was offline overlap with changes made somewhere else.\n\nThe newer cloud value was kept for the overlapping items and everything else was merged. A backup of this device's own data was downloaded.");
+       }else toast("Your offline changes were merged and synced");
+       scheduleCloudSave();
+     }else toast("Cloud data loaded");
    }else{
      migrateData();
      const useLocal=hasAlkawnData(db)?confirm("No cloud data exists for this account. Upload the Alkawn data currently on this device to the cloud?"):true;
@@ -368,6 +461,7 @@ async function initializeCloudUser(user){
    }
  }catch(e){
    console.error(e);
+   if(isNetworkError(e)&&sameUser&&hasAlkawnData(db)){startOfflineMode();return}
    cloudReady=false;
    setAuthStatus("Could not load Alkawn data: "+(e.message||e),true);
    await supabaseClient.auth.signOut();
@@ -378,13 +472,22 @@ supabaseClient.auth.onAuthStateChange((event,session)=>{
    if(session?.user){
      if(currentUser&&currentUser.id===session.user.id){currentUser=session.user;return}
      initializeCloudUser(session.user);
-   }else{cloudReady=false;currentUser=null;cloudVersion=null;showAuth()}
+   }else{
+     const meta=readSyncMeta();
+     if(currentUser&&cloudOffline)return; // already working offline
+     if(event!=="SIGNED_OUT"&&navigator.onLine===false&&meta&&meta.userId&&!meta.loggedOut&&hasAlkawnData(db)){
+       currentUser={id:meta.userId};startOfflineMode();return; // no signal and the login has lapsed: keep working from this device's copy
+     }
+     cloudReady=false;currentUser=null;cloudVersion=null;showAuth();
+   }
  },0);
 });
 document.addEventListener("visibilitychange",checkForCloudUpdates);
 window.addEventListener("focus",checkForCloudUpdates);
 // Check regularly so two open laptops normally catch up without a manual refresh.
 setInterval(checkForCloudUpdates,10000);
+window.addEventListener("online",()=>{cloudRetryDelay=5000;clearTimeout(cloudRetryTimer);if(cloudDirty&&cloudReady)saveCloudData();else checkForCloudUpdates()});
+window.addEventListener("offline",()=>{if(cloudReady)goOffline()});
 function migrateData(){
  db.students=Array.isArray(db.students)?db.students:[];db.classes=Array.isArray(db.classes)?db.classes:[];db.attendance=Array.isArray(db.attendance)?db.attendance:[];
  db.programs=Array.isArray(db.programs)?db.programs:[];
@@ -859,6 +962,7 @@ async function restoreFromBackup(x){
    }
    cloudBaseData=cloneData(db);cloudDirty=false;
    localStorage.setItem(KEY,JSON.stringify(db));
+   persistSync();
    location.reload();
  }catch(err){
    db=prev;
