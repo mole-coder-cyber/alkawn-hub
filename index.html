@@ -47,7 +47,7 @@ dialog{border:0;border-radius:13px;padding:0;width:min(560px,calc(100% - 24px));
 </div>
 <div id="app" class="app hidden">
 <header>
-  <div class="brand">Alkawn Hub <small>Attendance · v2026-10-07</small></div>
+  <div class="brand">Alkawn Hub <small>Attendance · v2026-10-08</small></div>
   <div class="header-actions">
     <span id="syncBadge" class="sync-badge"></span>
     <span id="statusText" class="status-text" aria-live="polite"></span>
@@ -109,11 +109,12 @@ dialog{border:0;border-radius:13px;padding:0;width:min(560px,calc(100% - 24px));
 
   <section id="history" class="view">
     <div class="row" style="margin-bottom:14px"><div><h1>Attendance History</h1><div class="muted">Review attendance by student, class or date.</div></div></div>
+    <div class="seg" style="margin-bottom:12px;display:flex;gap:6px"><button id="histModeClass" class="active" onclick="setHistoryMode('class')">By class</button><button id="histModeMonth" onclick="setHistoryMode('month')">Whole month</button></div>
     <div class="card">
       <div class="grid three">
-        <div><label>Class</label><select id="histClass" onchange="historyClassChanged()"></select></div>
+        <div id="histClassWrap"><label>Class</label><select id="histClass" onchange="historyClassChanged()"></select></div>
         <div><label>Month</label><input id="histMonth" type="month" onchange="historyMonthChanged()"></div>
-        <div><label>Session date</label><select id="histDate" onchange="renderHistory()"></select></div>
+        <div id="histDateWrap"><label>Session date</label><select id="histDate" onchange="renderHistory()"></select></div>
       </div>
     </div>
     <div id="historyArea" style="margin-top:14px"></div>
@@ -573,13 +574,42 @@ function classTimeMinutes(time){
  if(ampm==="am"&&h===12)h=0;
  return h*60+min;
 }
+function sessionMovedAway(c,date){return db.attendance.some(r=>r.classId===c.id&&r.originalDate===date&&r.date!==date)}
+function classesForDate(date){
+ // classes scheduled for this date, minus lessons moved to another day, plus lessons moved onto this day
+ const base=scheduledClassesForDate(date).filter(c=>!sessionMovedAway(c,date));
+ const extra=db.classes.filter(c=>!base.includes(c)&&db.attendance.some(r=>r.classId===c.id&&r.date===date&&r.originalDate&&r.originalDate!==date));
+ return base.concat(extra);
+}
+function sessionTime(c,date){const r=getRecord(c.id,date);return (r&&r.time)||c.time||""}
+function sessionState(c,date){const r=getRecord(c.id,date);if(r&&r.cancelled)return"cancelled";if(r&&r.status==="completed")return"done";return"todo"}
+function colorClassSelect(){
+ const c=$("attClass"),o=c.options[c.selectedIndex],st=o&&o.getAttribute("data-state");
+ c.style.color=st==="done"?"#18794e":"";c.style.fontWeight=st==="done"?"600":"";
+}
+function updateAttDateNote(date,classes){
+ const n=$("attDateNote"),day=weekdayForDate(date);
+ n.style.color="";n.style.fontWeight="";
+ if(!classes.length){n.textContent=`No classes are scheduled for ${day}.`;return}
+ if(date>today()){n.textContent=`${classes.length} ${classes.length===1?"class":"classes"} scheduled for ${day}.`;return}
+ const states=classes.map(x=>sessionState(x,date)),todo=states.filter(x=>x==="todo").length,cancelled=states.filter(x=>x==="cancelled").length;
+ if(todo===0){
+   if(cancelled===classes.length){n.textContent=`All ${day} classes were cancelled.`}
+   else{n.textContent=`${day} attendance complete ✓`;n.style.color="#18794e";n.style.fontWeight="600"}
+   return;
+ }
+ n.textContent=`${todo} ${todo===1?"class":"classes"} left to mark`;
+}
 function populateSelectors(){
  let date=$("attDate").value||today();
- let c=$("attClass"),old=c.value,classes=scheduledClassesForDate(date).slice().sort((a,b)=>classTimeMinutes(a.time)-classTimeMinutes(b.time)||String(a.name||"").localeCompare(String(b.name||"")));
- c.innerHTML=classes.length?classes.map(x=>`<option value="${x.id}">${esc(x.name)}${x.time?" — "+esc(x.time):""}</option>`).join(""):`<option value="">No class scheduled for this day</option>`;
+ let c=$("attClass"),old=c.value,classes=classesForDate(date).slice().sort((a,b)=>classTimeMinutes(sessionTime(a,date))-classTimeMinutes(sessionTime(b,date))||String(a.name||"").localeCompare(String(b.name||"")));
+ c.innerHTML=classes.length?classes.map(x=>{
+   const st=sessionState(x,date),t=sessionTime(x,date);
+   return `<option value="${x.id}" data-state="${st}" style="${st==="done"?"color:#18794e;font-weight:600":st==="cancelled"?"color:#8a8f98":""}">${st==="done"?"✓ ":""}${esc(x.name)}${t?" — "+esc(t):""}${st==="cancelled"?" (cancelled)":""}</option>`;
+ }).join(""):`<option value="">No class scheduled for this day</option>`;
  if(old&&classes.some(x=>x.id===old))c.value=old;else if(classes[0])c.value=classes[0].id;else c.value="";
- let when=date>today()?"future":date===today()?"today":"past";
- $("attDateNote").textContent=classes.length?`Classes for ${weekdayForDate(date)}.`:`No classes are scheduled for ${weekdayForDate(date)}.`;
+ colorClassSelect();
+ updateAttDateNote(date,classes);
 }
 function attendanceDateChanged(){populateSelectors();renderAttendance()}
 function openQuickSession(){showView("attendance");$("attDate").value=today();populateSelectors();renderAttendance()}
@@ -597,6 +627,7 @@ function ensureRecord(classId,date){
  // add those students to this session without disturbing existing attendance or temporary students.
  let changed=false;
  c.studentIds.forEach(studentId=>{
+   if((r.removedIds||[]).includes(studentId))return; // taken off this day's list on purpose
    if(!r.records.some(a=>a.studentId===studentId)){
      r.records.push({studentId,status:null,reason:"",temporary:false});
      changed=true;
@@ -609,7 +640,7 @@ function ensureRecord(classId,date){
 function renderAttendance(){
  let date=$("attDate").value||today();
  let c=db.classes.find(x=>x.id===$("attClass").value);
- if(!c||!scheduledClassesForDate(date).some(x=>x.id===c.id)){
+ if(!c||!classesForDate(date).some(x=>x.id===c.id)){
    $("attendanceArea").innerHTML=`<div class="card empty">Choose a date and select a class scheduled for that day.</div>`;
    return;
  }
@@ -617,13 +648,19 @@ function renderAttendance(){
  let present=r.records.filter(x=>x.status==="present").length, absent=r.records.filter(x=>x.status==="absent").length;
  let cancelled=!!r.cancelled;
  let summaryLeft=cancelled?`<span class="badge absent">Cancelled</span>`:future?`<span class="badge pending">Future lesson — attendance cannot be marked yet.</span>`:`<div class="attendance-counts"><div><b>${present}</b><span>Present</span></div><div><b>${absent}</b><span>Absent</span></div><div><b>${r.records.length-present-absent}</b><span>Not marked</span></div>${r.status==="completed"?`<span class="badge present">Attendance marked</span>`:""}</div>`;
- let actionButtons=cancelled?`<button class="btn" onclick="confirmCancelSession('${c.id}','${date}',true)">Reopen Lesson</button>`:`<button class="btn" onclick="addTemporary('${c.id}','${date}')">+ Temporary student</button>${future?"":`<button class="btn ${r.status==="completed"?"good":"primary"}" onclick="toggleComplete('${r.id}')">${r.status==="completed"?"Completed — Reopen":"Complete Attendance"}</button>`}<button class="btn danger" onclick="confirmCancelSession('${c.id}','${date}',false)">Cancel Lesson</button>`;
+ let editBtn=`<button class="btn" onclick="editSession('${c.id}','${date}')">Edit</button>`;
+ let actionButtons=cancelled?`${editBtn}<button class="btn" onclick="confirmCancelSession('${c.id}','${date}',true)">Reopen Lesson</button>`:`${editBtn}<button class="btn" onclick="addTemporary('${c.id}','${date}')">+ Temporary student</button>${future?"":`<button class="btn ${r.status==="completed"?"good":"primary"}" onclick="toggleComplete('${r.id}')">${r.status==="completed"?"Completed — Reopen":"Complete Attendance"}</button>`}<button class="btn danger" onclick="confirmCancelSession('${c.id}','${date}',false)">Cancel Lesson</button>`;
+ let movedNote=r.originalDate&&r.originalDate!==r.date?`Moved from ${esc(fmt(r.originalDate))}`:"";
+ let extra=(r.time||movedNote)?`<div class="small muted" style="margin-top:8px">${[r.time?`Time for this day: <b>${esc(r.time)}</b>`:"",movedNote].filter(Boolean).join(" · ")}</div>`:"";
+ let notes=r.notes?`<div class="small" style="margin-top:6px"><b>Notes:</b> ${esc(r.notes)}</div>`:"";
  $("attendanceArea").innerHTML=`
  <div class="card att-summary">
    <div class="row"><div class="att-summary-actions">${summaryLeft}</div><div class="actions">${actionButtons}</div></div>
    ${cancelled&&r.cancelReason?`<div class="small muted" style="margin-top:8px">Reason: ${esc(r.cancelReason)}</div>`:""}
+   ${extra}${notes}
  </div>
  ${cancelled?`<div class="card empty" style="margin-top:12px">This lesson is cancelled. No attendance can be marked.</div>`:`<div class="list" style="margin-top:12px">${r.records.map(a=>attendanceRow(a,c.id,date,future)).join("")}</div>`}`;
+ populateSelectors(); // keeps the green "done" marks and the "classes left" note up to date
 }
 function attendanceRow(a,classId,date,future=false){
  let s=db.students.find(x=>x.id===a.studentId);
@@ -667,6 +704,60 @@ function addTemporary(classId,date){
 }
 function saveTemporary(classId,date){let name=$("tempName").value.trim();if(!name)return;let r=getRecord(classId,date);r.records.push({studentId:"temp_"+uid(),name,status:null,reason:"",temporary:true});save();closeModal();renderAttendance();toast("Temporary student added")}
 
+function editSession(classId,date){
+ const c=db.classes.find(x=>x.id===classId),r=ensureRecord(classId,date);if(!c||!r)return;
+ const inSession=new Set(r.records.filter(a=>!a.temporary).map(a=>a.studentId));
+ const list=db.students.filter(s=>s.active||inSession.has(s.id)).slice().sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+ const completed=r.status==="completed";
+ openModal(`<h2>Edit this day</h2><div class="muted small">${esc(c.name)} · ${esc(fmt(date))}. Changes here only apply to this day, not to the class itself.</div>
+ <div class="grid two" style="margin-top:10px"><div><label>Time</label><input id="seTime" type="time" value="${esc(r.time||c.time||"")}"></div><div><label>Day (date)</label><input id="seDate" type="date" value="${esc(date)}" ${completed?"disabled":""}></div></div>
+ ${completed?`<div class="small muted" style="margin-top:4px">To move this lesson to another day, reopen the attendance first.</div>`:""}
+ <label>Students coming <span id="seCount" class="small muted"></span></label>
+ <input id="seSearch" placeholder="Search students..." oninput="filterSessionStudents()" style="margin-bottom:6px">
+ <div id="seStudents" style="max-height:220px;overflow:auto;border:1px solid var(--line);border-radius:9px;padding:4px 8px">${list.map(s=>`<label class="seRow" data-name="${esc(String(s.name).toLowerCase())}" style="display:flex;align-items:center;gap:8px;padding:6px 2px;margin:0"><input type="checkbox" class="seStudent" value="${s.id}" ${inSession.has(s.id)?"checked":""} onchange="updateSessionCount()" style="width:auto"> ${esc(s.name)}</label>`).join("")||`<div class="small muted" style="padding:8px">No students yet.</div>`}</div>
+ <div class="small muted" style="margin-top:4px">Temporary students are added or removed with the buttons on the attendance page.</div>
+ <label>Notes for this day</label><textarea id="seNotes" placeholder="e.g. Moved under the shelter because of rain">${esc(r.notes||"")}</textarea>
+ <div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveSession('${classId}','${date}')">Save</button></div>`);
+ updateSessionCount();
+}
+function updateSessionCount(){const n=document.querySelectorAll(".seStudent:checked").length;const e=$("seCount");if(e)e.textContent="("+n+" selected)"}
+function filterSessionStudents(){const q=($("seSearch").value||"").toLowerCase().trim();document.querySelectorAll("#seStudents .seRow").forEach(x=>{x.style.display=(!q||x.dataset.name.includes(q))?"flex":"none"})}
+function saveSession(classId,date){
+ const c=db.classes.find(x=>x.id===classId),r=getRecord(classId,date);if(!c||!r)return;
+ const time=$("seTime").value||"",notes=$("seNotes").value.trim();
+ let newDate=$("seDate").value||date;if(r.status==="completed")newDate=date;
+ const checked=new Set([...document.querySelectorAll(".seStudent:checked")].map(x=>x.value));
+ const listed=new Set([...document.querySelectorAll(".seStudent")].map(x=>x.value));
+ const marked=r.records.filter(a=>!a.temporary&&listed.has(a.studentId)&&!checked.has(a.studentId)&&a.status);
+ if(newDate!==date){
+   if(getRecord(classId,newDate)){alert("This class already has a lesson on that day. Choose a different day.");return}
+   if(newDate>today()&&r.records.some(a=>a.status)){alert("This lesson already has attendance marked, so it can't be moved to a future day.");return}
+ }
+ if(marked.length&&!confirm(marked.length+(marked.length===1?" student you are taking off this day has":" students you are taking off this day have")+" attendance marked already. Remove anyway?"))return;
+ r.removedIds=Array.isArray(r.removedIds)?r.removedIds:[];
+ listed.forEach(id=>{
+   const has=r.records.some(a=>a.studentId===id&&!a.temporary);
+   if(checked.has(id)){
+     r.removedIds=r.removedIds.filter(x=>x!==id);
+     if(!has)r.records.push({studentId:id,status:null,reason:"",temporary:false});
+   }else{
+     if(has)r.records=r.records.filter(a=>!(a.studentId===id&&!a.temporary));
+     if((c.studentIds||[]).includes(id)&&!r.removedIds.includes(id))r.removedIds.push(id);
+   }
+ });
+ r.time=(time&&time!==(c.time||""))?time:"";
+ r.notes=notes;
+ if(newDate!==date){
+   if(!r.originalDate)r.originalDate=date;
+   r.date=newDate;
+   if(r.originalDate===newDate)r.originalDate="";
+   if(r.status==="planned"||r.status==="open")r.status=newDate>today()?"planned":"open";
+ }
+ save();closeModal();
+ if(newDate!==date)$("attDate").value=newDate;
+ populateSelectors();$("attClass").value=classId;colorClassSelect();renderAttendance();
+ toast("Day updated");
+}
 function editReason(classId,date,studentId){
  let r=getRecord(classId,date),a=r.records.find(x=>x.studentId===studentId);if(!a)return;
  openModal(`<h2>Absence reason</h2><div class="muted small">Optional. Leave blank if you don't need one.</div><label>Reason</label><input id="reasonInput" value="${esc(a.reason)}" placeholder="e.g. Sick"><div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveReason('${classId}','${date}','${studentId}')">Save</button></div>`)
@@ -696,16 +787,19 @@ function openStudent(id=""){
 function saveStudent(id){let name=$("sName").value.trim();if(!name){alert("Enter a student name.");return}let programId=$("sProgram").value;let validLabels=new Set(labelsForProgram(programId).map(l=>l.id));let labelIds=[...document.querySelectorAll(".studentLabel:checked")].map(x=>x.value).filter(x=>validLabels.has(x));let obj={name,active:$("sActive").value==="true",notes:$("sNotes").value,programId,labelIds};if(id){let st=db.students.find(x=>x.id===id);Object.assign(st,obj)}else db.students.push({id:uid(),...obj});save();closeModal();populateStudentFilters();renderStudents();renderClasses();toast("Student saved")}
 function deleteStudent(id){
  let s=db.students.find(x=>x.id===id);if(!s)return;
- openModal(`<h2>Delete Student?</h2><div class="muted">Are you sure you want to delete <b>${esc(s.name)}</b>?</div><div class="small muted" style="margin-top:10px">The student will be removed from the Students list and recurring class lists. Their existing attendance history will be preserved.</div><div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Keep Student</button><button class="btn danger" onclick="confirmDeleteStudent('${id}')">Yes, Delete Student</button></div>`);
+ openModal(`<h2>Delete Student?</h2><div class="muted">Are you sure you want to delete <b>${esc(s.name)}</b>?</div><div class="small muted" style="margin-top:10px">The student will be removed from the Students list, from class lists, and from lessons whose attendance has not been marked yet. Attendance that was already marked stays in the history.</div><div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Keep Student</button><button class="btn danger" onclick="confirmDeleteStudent('${id}')">Yes, Delete Student</button></div>`);
 }
 function confirmDeleteStudent(id){
  let s=db.students.find(x=>x.id===id);if(!s)return;
- db.attendance.forEach(r=>r.records.forEach(a=>{if(a.studentId===id&&!a.name)a.name=s.name;}));
+ db.attendance.forEach(r=>{
+   r.records.forEach(a=>{if(a.studentId===id&&!a.name)a.name=s.name;}); // keep the name on marked history
+   if(r.status!=="completed"&&!r.cancelled)r.records=r.records.filter(a=>!(a.studentId===id&&!a.temporary&&!a.status)); // drop from lessons not marked yet
+   if(Array.isArray(r.removedIds))r.removedIds=r.removedIds.filter(x=>x!==id);
+ });
  db.classes.forEach(c=>{c.studentIds=(c.studentIds||[]).filter(studentId=>studentId!==id);});
  db.students=db.students.filter(x=>x.id!==id);
- save();closeModal();populateStudentFilters();renderStudents();renderClasses();toast("Student deleted");
+ save();closeModal();populateStudentFilters();renderStudents();renderClasses();renderAttendance();toast("Student deleted");
 }
-
 function renderStudents(){
  let q=($("studentSearch")?.value||"").toLowerCase().trim(),programId=$("studentProgramFilter")?.value||"",labelId=$("studentLabelFilter")?.value||"";
  let arr=db.students.filter(s=>{let labels=s.labelIds||[];return (!q||s.name.toLowerCase().includes(q))&&(!programId||s.programId===programId)&&(!labelId||labels.includes(labelId))});
@@ -838,12 +932,49 @@ function populateHistoryDates(preferred=""){
  if(old&&sessions.some(r=>r.date===old))d.value=old;else if(sessions.length)d.value=sessions[sessions.length-1].date;
 }
 function historyClassChanged(){populateHistoryDates();renderHistory()}
-function historyMonthChanged(){populateHistoryDates();renderHistory()}
+function historyMonthChanged(){if(histMode!=="month")populateHistoryDates();renderHistory()}
 function moveHistorySession(direction){
  let cid=$("histClass").value,month=$("histMonth").value||today().slice(0,7),sessions=recordedSessionsForClass(cid,month),current=$("histDate").value,i=sessions.findIndex(r=>r.date===current),next=sessions[i+direction];
  if(next){$("histDate").value=next.date;renderHistory()}
 }
+let histMode="class";
+function setHistoryMode(m){
+ histMode=m==="month"?"month":"class";
+ $("histModeClass").classList.toggle("active",histMode==="class");
+ $("histModeMonth").classList.toggle("active",histMode==="month");
+ $("histClassWrap").style.display=$("histDateWrap").style.display=histMode==="month"?"none":"";
+ if(histMode==="class")populateHistoryDates();
+ renderHistory();
+}
+function renderHistoryMonth(){
+ const month=$("histMonth").value||today().slice(0,7),[y,m]=month.split("-").map(Number),days=new Date(y,m,0).getDate(),t=today();
+ const monthName=new Date(y,m-1,1).toLocaleDateString(undefined,{month:"long",year:"numeric"});
+ let held=0,cancelled=0,upcoming=0,open=0,html="";
+ for(let d=1;d<=days;d++){
+   const date=`${month}-${String(d).padStart(2,"0")}`,entries=[],seen=new Set();
+   classesForDate(date).forEach(c=>{const r=getRecord(c.id,date);if(r)seen.add(r.id);entries.push({name:c.name||"Class",time:sessionTime(c,date),r})});
+   db.attendance.filter(r=>r.date===date&&!seen.has(r.id)).forEach(r=>{
+     const known=db.classes.some(x=>x.id===r.classId);
+     if(!known&&!r.cancelled&&r.status!=="completed"&&!r.records.some(a=>a.status))return; // empty leftovers from deleted classes
+     entries.push({name:r.className||(db.classes.find(x=>x.id===r.classId)||{}).name||"Class",time:r.time||"",r});
+   });
+   if(!entries.length)continue;
+   entries.sort((a,b)=>classTimeMinutes(a.time)-classTimeMinutes(b.time)||String(a.name).localeCompare(String(b.name)));
+   html+=`<div style="margin-top:14px"><h3${date===t?' style="color:var(--accent)"':""}>${esc(fmtClassDate(date))}${date===t?" · today":""}</h3><div class="list" style="margin-top:6px">`+entries.map(e=>{
+     const r=e.r;let label,cls;
+     if(r&&r.cancelled){label="Cancelled";cls="absent";cancelled++}
+     else if(r&&r.status==="completed"){label="Held";cls="present";held++}
+     else if(date>t){label="Upcoming";cls="pending";upcoming++}
+     else{label=r&&r.records.some(a=>a.status)?"Partly marked":"Not marked";cls="pending";open++}
+     const moved=r&&r.originalDate&&r.originalDate!==r.date;
+     return `<div class="list-item"><div class="row"><div><b>${esc(e.name)}</b>${e.time?` <span class="muted">· ${esc(e.time)}</span>`:""}${r&&r.time?` <span class="small muted">(time changed)</span>`:""}${moved?` <span class="small muted">· moved from ${esc(fmt(r.originalDate))}</span>`:""}</div><span class="badge ${cls}">${label}</span></div>${r&&r.cancelled&&r.cancelReason?`<div class="small muted" style="margin-top:4px">Reason: ${esc(r.cancelReason)}</div>`:""}${r&&r.notes?`<div class="small" style="margin-top:6px"><b>Notes:</b> ${esc(r.notes)}</div>`:""}</div>`;
+   }).join("")+`</div></div>`;
+ }
+ const parts=[held&&`${held} held`,cancelled&&`${cancelled} cancelled`,upcoming&&`${upcoming} upcoming`,open&&`${open} not marked`].filter(Boolean);
+ $("historyArea").innerHTML=html?`<div class="card"><h2>${esc(monthName)}</h2><div class="muted">${parts.join(" · ")}</div>${html}</div>`:`<div class="card empty">No classes are scheduled or recorded in ${esc(monthName)}.</div>`;
+}
 function renderHistory(){
+ if(histMode==="month"){renderHistoryMonth();return}
  let cid=$("histClass").value,month=$("histMonth").value||today().slice(0,7),date=$("histDate").value;
  if(!cid){$("historyArea").innerHTML=`<div class="card empty">Select a recurring class to view its attendance history.</div>`;return}
  let sessions=recordedSessionsForClass(cid,month),r=sessions.find(x=>x.date===date)||sessions[sessions.length-1],c=db.classes.find(x=>x.id===cid);
@@ -852,7 +983,7 @@ function renderHistory(){
  let present=r.records.filter(x=>x.status==="present").length,absent=r.records.filter(x=>x.status==="absent").length,total=r.records.length;
  let idx=sessions.findIndex(x=>x.id===r.id);
  let rows=r.records.map(a=>{let s=db.students.find(x=>x.id===a.studentId);return {name:s?.name||a.name||"Temporary student",status:a.status,reason:a.reason,temporary:a.temporary}});
- $("historyArea").innerHTML=`<div class="card"><div class="row"><div><h2>${esc(c?.name||r.className||"Class")}</h2><div class="muted">Attendance session</div></div><div class="stat">${total}</div></div><div class="history-session-date" style="margin:16px 0"><h2>${fmt(r.date)}</h2></div><div class="grid three"><div class="card"><div class="stat">${present}</div><div class="stat-label">Present</div></div><div class="card"><div class="stat">${absent}</div><div class="stat-label">Absent</div></div><div class="card"><div class="stat">${total-present-absent}</div><div class="stat-label">Not marked</div></div></div><div class="history-students list">${rows.map(x=>`<div class="list-item"><div class="row"><div><b>${esc(x.name)}</b>${x.temporary?` <span class="badge pending">Temporary</span>`:""}${x.reason?`<div class="small muted">${esc(x.reason)}</div>`:""}</div><span class="badge ${x.status==="present"?"present":x.status==="absent"?"absent":"pending"}">${x.status||"Not marked"}</span></div></div>`).join("")}</div><div class="history-session-nav" style="margin-top:16px"><button class="btn" ${idx<=0?"disabled":""} onclick="moveHistorySession(-1)">← Previous Session</button><span class="small muted">Session ${idx+1} of ${sessions.length}</span><button class="btn" ${idx<0||idx>=sessions.length-1?"disabled":""} onclick="moveHistorySession(1)">Next Session →</button></div></div>`;
+ $("historyArea").innerHTML=`<div class="card"><div class="row"><div><h2>${esc(c?.name||r.className||"Class")}</h2><div class="muted">Attendance session</div></div><div class="stat">${total}</div></div><div class="history-session-date" style="margin:16px 0"><h2>${fmt(r.date)}</h2>${r.time?`<div class="small muted">Time that day: ${esc(r.time)}</div>`:""}${r.originalDate&&r.originalDate!==r.date?`<div class="small muted">Moved from ${esc(fmt(r.originalDate))}</div>`:""}${r.notes?`<div class="small" style="margin-top:6px"><b>Notes:</b> ${esc(r.notes)}</div>`:""}</div><div class="grid three"><div class="card"><div class="stat">${present}</div><div class="stat-label">Present</div></div><div class="card"><div class="stat">${absent}</div><div class="stat-label">Absent</div></div><div class="card"><div class="stat">${total-present-absent}</div><div class="stat-label">Not marked</div></div></div><div class="history-students list">${rows.map(x=>`<div class="list-item"><div class="row"><div><b>${esc(x.name)}</b>${x.temporary?` <span class="badge pending">Temporary</span>`:""}${x.reason?`<div class="small muted">${esc(x.reason)}</div>`:""}</div><span class="badge ${x.status==="present"?"present":x.status==="absent"?"absent":"pending"}">${x.status||"Not marked"}</span></div></div>`).join("")}</div><div class="history-session-nav" style="margin-top:16px"><button class="btn" ${idx<=0?"disabled":""} onclick="moveHistorySession(-1)">← Previous Session</button><span class="small muted">Session ${idx+1} of ${sessions.length}</span><button class="btn" ${idx<0||idx>=sessions.length-1?"disabled":""} onclick="moveHistorySession(1)">Next Session →</button></div></div>`;
 }
 
 function exportData(){
