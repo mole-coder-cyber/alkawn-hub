@@ -14,6 +14,21 @@ header{position:sticky;top:0;z-index:5;background:var(--text);color:#fff;padding
 .brand{font-weight:800;font-size:19px}.brand small{display:block;font-size:11px;font-weight:500;opacity:.7}
 .header-actions{display:flex;gap:7px;flex-wrap:wrap}
 .status-text{align-self:center;font-size:12px;color:#8e99a6;margin-right:4px;opacity:0;transition:opacity .35s;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.status-text.show{opacity:1}
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;margin-top:12px}
+.cal-h{font-size:11px;text-align:center;color:#6b7683;padding:2px 0;font-weight:600}
+.cal-d{min-height:66px;border:1px solid var(--line);border-radius:8px;padding:4px 5px;font-size:11px;background:#fafbfc;overflow:hidden;position:relative;line-height:1.25}
+.cal-d b{font-size:13px;display:block}
+.cal-d span{display:block;margin-top:2px}
+.cal-d.held{background:#e3f4ea;border-color:#18794e;color:#14633f}
+.cal-d.cancelled{background:#fdebea;border-color:#c0392b;color:#a02a20}
+.cal-d.open{background:#fff4d6;border-color:#e0a93b;color:#8a5a00}
+.cal-d.upcoming{background:#fff;border:1px dashed #9fb3c8;color:#41505e}
+.cal-d.paused{background:repeating-linear-gradient(45deg,#f1f3f5,#f1f3f5 6px,#e8ebee 6px,#e8ebee 12px);color:#7a8590}
+.cal-d.click{cursor:pointer}
+.cal-d.today{outline:2px solid var(--accent);outline-offset:-2px}
+.cal-note{position:absolute;right:4px;top:2px;font-style:normal;font-size:12px}
+.cal-legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px;font-size:12px;color:#59636e}
+.cal-legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:5px;vertical-align:-2px;border:1px solid #aab3bc}
 .sync-badge{display:none;align-self:center;font-size:12px;color:#e0a93b;margin-right:4px}header button{background:#ffffff16;color:#fff;border:1px solid #ffffff30;border-radius:8px;padding:8px 11px}
 main{max-width:1050px;margin:auto;padding:18px}.nav{display:flex;gap:7px;overflow:auto;margin-bottom:18px}.nav button{border:1px solid var(--line);background:var(--card);padding:10px 14px;border-radius:9px;white-space:nowrap}.nav button.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 .view{display:none}.view.active{display:block}.grid{display:grid;gap:14px}.grid.two{grid-template-columns:repeat(2,minmax(0,1fr))}.grid.three{grid-template-columns:repeat(3,minmax(0,1fr))}
@@ -47,7 +62,7 @@ dialog{border:0;border-radius:13px;padding:0;width:min(560px,calc(100% - 24px));
 </div>
 <div id="app" class="app hidden">
 <header>
-  <div class="brand">Alkawn Hub <small>Attendance · v2026-10-08</small></div>
+  <div class="brand">Alkawn Hub <small>Attendance · v2026-10-09</small></div>
   <div class="header-actions">
     <span id="syncBadge" class="sync-badge"></span>
     <span id="statusText" class="status-text" aria-live="polite"></span>
@@ -103,13 +118,17 @@ dialog{border:0;border-radius:13px;padding:0;width:min(560px,calc(100% - 24px));
 
   <section id="classes" class="view">
     <div class="row" style="margin-bottom:14px"><div><h1>Classes</h1><div class="muted">Recurring and once-off classes, and their default student lists.</div></div><button class="btn primary" onclick="openClass()">+ Class</button></div>
-    <input id="classSearch" placeholder="Search classes..." oninput="renderClasses()" style="margin-bottom:12px">
+    <div class="card" style="margin-bottom:12px"><div class="grid three">
+      <div><label>Search</label><input id="classSearch" placeholder="Search classes..." oninput="renderClasses()"></div>
+      <div><label>Program</label><select id="classProgramFilter" onchange="classProgramFilterChanged()"></select></div>
+      <div><label>Label</label><select id="classLabelFilter" onchange="renderClasses()"></select></div>
+    </div></div>
     <div id="classesArea" class="list"></div>
   </section>
 
   <section id="history" class="view">
     <div class="row" style="margin-bottom:14px"><div><h1>Attendance History</h1><div class="muted">Review attendance by student, class or date.</div></div></div>
-    <div class="seg" style="margin-bottom:12px;display:flex;gap:6px"><button id="histModeClass" class="active" onclick="setHistoryMode('class')">By class</button><button id="histModeMonth" onclick="setHistoryMode('month')">Whole month</button></div>
+    <div class="seg" style="margin-bottom:12px;display:flex;gap:6px"><button id="histModeClass" class="active" onclick="setHistoryMode('class')">Session by session</button><button id="histModeMonth" onclick="setHistoryMode('month')">Month calendar</button></div>
     <div class="card">
       <div class="grid three">
         <div id="histClassWrap"><label>Class</label><select id="histClass" onchange="historyClassChanged()"></select></div>
@@ -558,9 +577,39 @@ function classTypeBadge(c){
   ?'<span class="badge" style="background:#fff1cc;color:#8a5a00">Once-off</span>'
   :'<span class="badge" style="background:#e3edf4;color:#315f78">Recurring</span>';
 }
+function classPauses(c){return Array.isArray(c.pauses)?c.pauses:[]}
+function isPausedOn(c,date){return classPauses(c).some(p=>p.from&&date>=p.from&&(!p.until||date<p.until))}
+function isPausedNow(c){return classType(c)!=="once"&&isPausedOn(c,today())}
+function currentPause(c){
+ const t=today();
+ return classPauses(c).filter(p=>p.from&&(!p.until||p.until>t)).sort((a,b)=>a.from.localeCompare(b.from))[0]||null;
+}
+function pauseText(c){
+ const p=currentPause(c);if(!p)return"";
+ const back=p.until?`back on ${fmtClassDate(p.until)}`:"no return date";
+ return p.from>today()?`Pauses from ${fmtClassDate(p.from)}${p.until?" · "+back:""}`:`Paused since ${fmtClassDate(p.from)} · ${back}`;
+}
+function pauseBadge(c){
+ const t=pauseText(c);if(!t)return"";
+ return `<span class="badge" style="background:${isPausedNow(c)?"#eceff2;color:#59636e":"#fff1cc;color:#8a5a00"}">${esc(t)}</span>`;
+}
+function classScheduledIgnoringPause(c,date){
+ if(classType(c)==="once")return c.date===date;
+ if(c.startDate&&date<c.startDate)return false; // a new class does not appear in dates before it was created
+ const day=weekdayForDate(date);
+ return Array.isArray(c.days)?c.days.includes(day):c.day===day;
+}
 function scheduledClassesForDate(date){
- let day=weekdayForDate(date);
- return db.classes.filter(c=>classType(c)==="once"?c.date===date:(Array.isArray(c.days)?c.days.includes(day):c.day===day));
+ return db.classes.filter(c=>classScheduledIgnoringPause(c,date)&&!(classType(c)!=="once"&&isPausedOn(c,date)));
+}
+// Remove empty, never-used lessons on days the class is not scheduled (before its start date, during a pause...)
+function pruneEmptySessions(c){
+ db.attendance=db.attendance.filter(r=>{
+   if(r.classId!==c.id)return true;
+   if(r.originalDate||r.cancelled||r.status==="completed"||r.notes||r.time)return true;
+   if(r.records.some(a=>a.status||a.temporary))return true;
+   return classScheduledIgnoringPause(c,r.date)&&!(classType(c)!=="once"&&isPausedOn(c,r.date));
+ });
 }
 function classHasRecordForDate(c,date){
  return !!db.attendance.find(r=>r.date===date&&(r.classId===c.id||r.className===c.name));
@@ -768,6 +817,7 @@ function populateStudentFilters(){
  populateProgramSelect("studentProgramFilter",oldP,true);
  populateLabelSelect("studentLabelFilter",oldL,true,p?.value||"");
  if(!labelsForProgram(p?.value||"").some(x=>x.id===oldL)&&l)l.value="";
+ populateClassFilters();
 }
 function studentProgramFilterChanged(){populateLabelSelect("studentLabelFilter","",true,$("studentProgramFilter").value);renderStudents()}
 function renderStudentLabelDropdown(programId,selectedIds=[]){
@@ -858,7 +908,7 @@ function openClass(id=""){
  let ctype=classType(c);
  let activeStudents=db.students.filter(s=>s.active);
  let opts=activeStudents.map(s=>`<label class="class-student-row" data-student-name="${esc(s.name.toLowerCase())}" data-program-id="${esc(s.programId||"")}" data-label-ids="${esc((s.labelIds||[]).join(","))}"><input class="classStudent" type="checkbox" value="${s.id}" ${c.studentIds.includes(s.id)?"checked":""} onchange="updateClassStudentCount()"> <span>${esc(s.name)}</span></label>`).join("")||'<div class="muted small">Add active students first.</div>';
- openModal(`<h2>${id?"Edit":"Add"} Class</h2><label>Class name</label><input id="cName" value="${esc(c.name)}" placeholder="e.g. Private Lesson"><label>Class type</label><select id="cType" onchange="toggleClassType()"><option value="recurring" ${ctype!=="once"?"selected":""}>Recurring (repeats every week)</option><option value="once" ${ctype==="once"?"selected":""}>Once-off (a single date)</option></select><div class="grid two"><div><label>Program</label><select id="cProgram" onchange="refreshClassStudentFilters()"></select></div><div><label>Time</label><input id="cTime" type="time" value="${esc(c.time)}"></div></div><div id="cDaysWrap" style="display:${ctype==='once'?'none':'block'}"><label>Days</label><div id="cDays" class="day-checks">${["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"].map(x=>`<label class="day-check"><input type="checkbox" class="classDay" value="${x}" ${days.includes(x)?"checked":""}> <span>${x}</span></label>`).join("")}</div></div><div id="cDateWrap" style="display:${ctype==='once'?'block':'none'}"><label>Date</label><input id="cDate" type="date" value="${esc(c.date||"")}"></div><label>Default student list</label><select id="cListMode" onchange="toggleClassLabelMode()"><option value="manual" ${c.listMode!=="label"?"selected":""}>Manual Student List</option><option value="label" ${c.listMode==="label"?"selected":""}>Label Default List</option></select><div id="classLabelMode" style="display:${c.listMode==="label"?"block":"none"}"><label>Default label</label><select id="cDefaultLabel" onchange="applyDefaultLabel()"></select><div class="small muted" style="margin-top:5px">Students with this label are automatically included, and you can still edit the list below.</div></div><label>Find students</label><div class="class-filter-row"><input id="classStudentSearch" placeholder="Search students..." oninput="filterClassStudents()"><select id="classStudentProgramFilter" onchange="filterClassStudents()"></select><select id="classStudentLabelFilter" onchange="filterClassStudents()"></select></div><div id="classStudentList" class="class-student-list">${opts}</div><div id="classStudentCount" class="small muted" style="margin-top:7px">${c.studentIds.length} selected</div><label>Notes</label><textarea id="cNotes">${esc(c.notes||"")}</textarea><div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveClass('${id}')">Save Class</button></div>`);
+ openModal(`<h2>${id?"Edit":"Add"} Class</h2><label>Class name</label><input id="cName" value="${esc(c.name)}" placeholder="e.g. Private Lesson"><label>Class type</label><select id="cType" onchange="toggleClassType()"><option value="recurring" ${ctype!=="once"?"selected":""}>Recurring (repeats every week)</option><option value="once" ${ctype==="once"?"selected":""}>Once-off (a single date)</option></select><div class="grid two"><div><label>Program</label><select id="cProgram" onchange="refreshClassStudentFilters()"></select></div><div><label>Time</label><input id="cTime" type="time" value="${esc(c.time)}"></div></div><div id="cDaysWrap" style="display:${ctype==='once'?'none':'block'}"><label>Days</label><div id="cDays" class="day-checks">${["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"].map(x=>`<label class="day-check"><input type="checkbox" class="classDay" value="${x}" ${days.includes(x)?"checked":""}> <span>${x}</span></label>`).join("")}</div><label>Starts on</label><input id="cStart" type="date" value="${esc(id?(c.startDate||""):today())}"><div class="small muted" style="margin-top:4px">The class only appears in attendance from this date onwards. Leave empty to include earlier dates too.</div></div><div id="cDateWrap" style="display:${ctype==='once'?'block':'none'}"><label>Date</label><input id="cDate" type="date" value="${esc(c.date||"")}"></div><label>Default student list</label><select id="cListMode" onchange="toggleClassLabelMode()"><option value="manual" ${c.listMode!=="label"?"selected":""}>Manual Student List</option><option value="label" ${c.listMode==="label"?"selected":""}>Label Default List</option></select><div id="classLabelMode" style="display:${c.listMode==="label"?"block":"none"}"><label>Default label</label><select id="cDefaultLabel" onchange="applyDefaultLabel()"></select><div class="small muted" style="margin-top:5px">Students with this label are automatically included, and you can still edit the list below.</div></div><label>Find students</label><div class="class-filter-row"><input id="classStudentSearch" placeholder="Search students..." oninput="filterClassStudents()"><select id="classStudentProgramFilter" onchange="filterClassStudents()"></select><select id="classStudentLabelFilter" onchange="filterClassStudents()"></select></div><div id="classStudentList" class="class-student-list">${opts}</div><div id="classStudentCount" class="small muted" style="margin-top:7px">${c.studentIds.length} selected</div><label>Notes</label><textarea id="cNotes">${esc(c.notes||"")}</textarea><div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveClass('${id}')">Save Class</button></div>`);
  populateProgramSelect("cProgram",c.programId,false);populateProgramSelect("classStudentProgramFilter",c.programId,true);populateLabelSelect("classStudentLabelFilter","",true,c.programId);populateLabelSelect("cDefaultLabel",c.defaultLabelId,false,c.programId);refreshClassStudentFilters();if(c.listMode==="label")applyDefaultLabel();else updateClassStudentCount();
 }
 function toggleClassType(){let once=$("cType").value==="once";$("cDaysWrap").style.display=once?"none":"block";$("cDateWrap").style.display=once?"block":"none"}
@@ -867,16 +917,55 @@ function applyDefaultLabel(){if(!$("cProgram")?.value)return;let id=$("cDefaultL
 function toggleClassLabelMode(){let mode=$("cListMode").value,box=$("classLabelMode");box.style.display=mode==="label"?"block":"none";if(mode==="label")applyDefaultLabel()}
 function refreshClassStudentFilters(){let p=$("cProgram")?.value||"";if($("classStudentProgramFilter"))$("classStudentProgramFilter").value=p;let l=$("classStudentLabelFilter")?.value||"",d=$("cDefaultLabel")?.value||"";populateLabelSelect("classStudentLabelFilter",l,true,p);populateLabelSelect("cDefaultLabel",d,false,p);if($("classStudentLabelFilter")&&!labelsForProgram(p).some(x=>x.id===$("classStudentLabelFilter").value))$("classStudentLabelFilter").value="";if($("cDefaultLabel")&&!labelsForProgram(p).some(x=>x.id===$("cDefaultLabel").value))$("cDefaultLabel").value="";filterClassStudents()}
 function filterClassStudents(){let q=($("classStudentSearch")?.value||"").toLowerCase().trim(),p=$("classStudentProgramFilter")?.value||"",l=$("classStudentLabelFilter")?.value||"";document.querySelectorAll('#classStudentList .class-student-row').forEach(row=>{let labels=(row.dataset.labelIds||'').split(',').filter(Boolean);let name=(row.dataset.studentName||'');row.style.display=(!q||name.includes(q))&&(!p||row.dataset.programId===p)&&(!l||labels.includes(l))?'flex':'none'});updateClassStudentCount()}
-function saveClass(id){let name=$("cName").value.trim();if(!name){alert("Enter a class name.");return}let type=$("cType").value==="once"?"once":"recurring",date="",days=[];if(type==="once"){date=$("cDate").value;if(!date){alert("Choose the date for this once-off class.");return}}else{days=[...document.querySelectorAll(".classDay:checked")].map(x=>x.value);if(!days.length){alert("Select at least one day.");return}}let studentIds=[...document.querySelectorAll(".classStudent:checked")].map(x=>x.value);let obj={name,type,date,days,day:days[0]||"",time:$("cTime").value,studentIds,notes:$("cNotes").value,programId:$("cProgram").value,listMode:$("cListMode").value,defaultLabelId:$("cDefaultLabel").value};if(id)Object.assign(db.classes.find(x=>x.id===id),obj);else db.classes.push({id:uid(),...obj});save();closeModal();populateSelectors();renderClasses();toast("Class saved")}
+function saveClass(id){let name=$("cName").value.trim();if(!name){alert("Enter a class name.");return}let type=$("cType").value==="once"?"once":"recurring",date="",days=[];if(type==="once"){date=$("cDate").value;if(!date){alert("Choose the date for this once-off class.");return}}else{days=[...document.querySelectorAll(".classDay:checked")].map(x=>x.value);if(!days.length){alert("Select at least one day.");return}}let studentIds=[...document.querySelectorAll(".classStudent:checked")].map(x=>x.value);let obj={name,type,date,startDate:type==="recurring"?($("cStart").value||""):"",days,day:days[0]||"",time:$("cTime").value,studentIds,notes:$("cNotes").value,programId:$("cProgram").value,listMode:$("cListMode").value,defaultLabelId:$("cDefaultLabel").value};let cls;if(id){cls=db.classes.find(x=>x.id===id);Object.assign(cls,obj)}else{cls={id:uid(),...obj};db.classes.push(cls)}pruneEmptySessions(cls);save();closeModal();populateSelectors();renderClasses();renderAttendance();toast("Class saved")}
+function pauseClass(id){
+ const c=db.classes.find(x=>x.id===id);if(!c||classType(c)==="once")return;
+ const p=currentPause(c),t=today(),active=!!p&&p.from<=t;
+ openModal(`<h2>${p?"Pause settings":"Pause class"}</h2><div class="muted small">${esc(c.name)}. While a class is paused it does not appear in Take Attendance. Lessons before the pause date are not affected.</div>
+ <label>Pause from</label><input id="pFrom" type="date" value="${esc(p?p.from:t)}">
+ <label>Back on (optional)</label><input id="pUntil" type="date" value="${esc((p&&p.until)||"")}">
+ <div class="small muted" style="margin-top:4px">Leave empty if you don't know yet. You can resume the class whenever you are ready.</div>
+ <div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Close</button>${p?`<button class="btn" onclick="resumeClass('${id}')">${active?"Resume now":"Cancel pause"}</button>`:""}<button class="btn primary" onclick="savePause('${id}')">Save pause</button></div>`);
+}
+function savePause(id){
+ const c=db.classes.find(x=>x.id===id);if(!c)return;
+ const from=$("pFrom").value,until=$("pUntil").value;
+ if(!from){alert("Choose the date the pause starts.");return}
+ if(until&&until<=from){alert("The 'back on' date must be after the pause date.");return}
+ const p=currentPause(c);
+ if(p){p.from=from;p.until=until}else c.pauses=classPauses(c).concat([{id:uid(),from,until}]);
+ pruneEmptySessions(c);save();closeModal();populateSelectors();renderClasses();renderAttendance();
+ toast(from>today()?"Pause scheduled":"Class paused");
+}
+function resumeClass(id){
+ const c=db.classes.find(x=>x.id===id);if(!c)return;
+ const p=currentPause(c);if(!p)return;
+ if(p.from<today()){p.until=today()}else c.pauses=c.pauses.filter(x=>x!==p); // paused days that already passed stay paused
+ save();closeModal();populateSelectors();renderClasses();renderAttendance();toast("Class resumed");
+}
+function classCardButtons(c){
+ const once=classType(c)==="once",paused=isPausedNow(c);
+ return `<button class="btn" onclick="openClass('${c.id}')">Edit</button>`
+  +(once?"":`<button class="btn" onclick="pauseClass('${c.id}')">${currentPause(c)?"Pause settings":"Pause"}</button>`)
+  +(paused?`<button class="btn good" onclick="resumeClass('${c.id}')">Resume</button>`:`<button class="btn primary" onclick="openClassAttendance('${c.id}')">Take Attendance</button>`)
+  +`<button class="btn danger" onclick="confirmDeleteClass('${c.id}')">Delete</button>`;
+}
 function classSearchText(c){
  let p=programById(c.programId),label=labelById(c.defaultLabelId);
- return [c.name,p&&p.name,label&&label.name,classType(c)==="once"?"once-off once off one time":"recurring weekly",classScheduleText(c),c.date,c.notes].filter(Boolean).join(" ").toLowerCase();
+ return [c.name,p&&p.name,label&&label.name,classType(c)==="once"?"once-off once off one time":"recurring weekly",isPausedNow(c)?"paused":"",classScheduleText(c),c.date,c.notes].filter(Boolean).join(" ").toLowerCase();
 }
+function populateClassFilters(){
+ let p=$("classProgramFilter"),oldP=p?.value||"",l=$("classLabelFilter"),oldL=l?.value||"";
+ populateProgramSelect("classProgramFilter",oldP,true);
+ populateLabelSelect("classLabelFilter",oldL,true,p?.value||"");
+ if(l&&!labelsForProgram(p?.value||"").some(x=>x.id===oldL))l.value="";
+}
+function classProgramFilterChanged(){populateLabelSelect("classLabelFilter","",true,$("classProgramFilter").value);renderClasses()}
 function renderClasses(){
- const q=($("classSearch")?.value||"").toLowerCase().trim();
- const sorted=db.classes.slice().sort((a,b)=>String(a.name||"").localeCompare(String(b.name||""),undefined,{sensitivity:"base",numeric:true}));
- const list=q?sorted.filter(c=>classSearchText(c).includes(q)):sorted;
- $("classesArea").innerHTML=list.length?list.map(c=>{let p=programById(c.programId),label=labelById(c.defaultLabelId);return `<div class="card"><div class="row"><div style="cursor:pointer;flex:1" onclick="classProfile('${c.id}')" title="Open class profile"><h2>${esc(c.name)}</h2><div class="muted">${esc(classScheduleText(c))} · ${c.studentIds.length} default students</div><div class="small" style="margin-top:6px">${classTypeBadge(c)} ${p?`<span class="badge pending">${esc(p.name)}</span>`:""} ${c.listMode==="label"&&label?`<span class="badge present">Label: ${esc(label.name)}</span>`:""}</div></div><div class="actions"><button class="btn" onclick="openClass('${c.id}')">Edit</button><button class="btn primary" onclick="openClassAttendance('${c.id}')">Take Attendance</button><button class="btn danger" onclick="confirmDeleteClass('${c.id}')">Delete</button></div></div><div class="small muted" style="margin-top:8px">${c.studentIds.map(id=>esc(db.students.find(s=>s.id===id)?.name||"Unknown")).join(", ")||"No students assigned yet."}</div></div>`}).join(""):(db.classes.length?`<div class="card empty">No classes match "${esc(q)}".</div>`:`<div class="card empty">No classes yet. Create a class and choose its default students.</div>`)
+ const q=($("classSearch")?.value||"").toLowerCase().trim(),pf=$("classProgramFilter")?.value||"",lf=$("classLabelFilter")?.value||"";
+ const sorted=db.classes.slice().sort((a,b)=>(isPausedNow(a)?1:0)-(isPausedNow(b)?1:0)||String(a.name||"").localeCompare(String(b.name||""),undefined,{sensitivity:"base",numeric:true}));
+ const list=sorted.filter(c=>(!q||classSearchText(c).includes(q))&&(!pf||c.programId===pf)&&(!lf||c.defaultLabelId===lf));
+ $("classesArea").innerHTML=list.length?list.map(c=>{let p=programById(c.programId),label=labelById(c.defaultLabelId);return `<div class="card" style="${isPausedNow(c)?"opacity:.82":""}"><div class="row"><div style="cursor:pointer;flex:1" onclick="classProfile('${c.id}')" title="Open class profile"><h2>${esc(c.name)}</h2><div class="muted">${esc(classScheduleText(c))} · ${c.studentIds.length} default students</div><div class="small" style="margin-top:6px">${classTypeBadge(c)} ${pauseBadge(c)} ${p?`<span class="badge pending">${esc(p.name)}</span>`:""} ${c.listMode==="label"&&label?`<span class="badge present">Label: ${esc(label.name)}</span>`:""}</div></div><div class="actions">${classCardButtons(c)}</div></div><div class="small muted" style="margin-top:8px">${c.studentIds.map(id=>esc(db.students.find(s=>s.id===id)?.name||"Unknown")).join(", ")||"No students assigned yet."}</div></div>`}).join(""):(db.classes.length?`<div class="card empty">${q?`No classes match "${esc(q)}".`:"No classes match these filters."}</div>`:`<div class="card empty">No classes yet. Create a class and choose its default students.</div>`)
 }
 function classProfile(id){
  let c=db.classes.find(x=>x.id===id);if(!c)return;
@@ -886,7 +975,7 @@ function classProfile(id){
  let when=once?(c.date?fmtClassDate(c.date)+(c.date<today()?" (past)":""):"No date set"):(classDaysList(c).length?"Every "+classDaysList(c).join(", "):"No days set");
  openModal(`<div class="row"><div><h2>${esc(c.name)}</h2><div style="margin-top:6px">${classTypeBadge(c)} ${p?`<span class="badge pending">${esc(p.name)}</span>`:""} ${c.listMode==="label"&&label?`<span class="badge present">Label: ${esc(label.name)}</span>`:""}</div></div><button class="btn" onclick="closeModal();openClass('${id}')">Edit</button></div>
  <div class="grid two" style="margin:14px 0"><div class="card"><div class="stat-label">Class type</div><div><b>${once?"Once-off":"Recurring"}</b></div></div><div class="card"><div class="stat-label">${once?"Date":"Days"}</div><div><b>${esc(when)}</b></div></div><div class="card"><div class="stat-label">Time</div><div><b>${c.time?esc(c.time):"Not set"}</b></div></div><div class="card"><div class="stat-label">Sessions recorded</div><div><b>${sessions.length}</b>${last?` <span class="small muted">· last ${esc(fmtClassDate(last))}</span>`:""}</div></div></div>
- <h3>Default students (${names.length})</h3><div class="small muted" style="margin:4px 0 12px">${names.map(esc).join(", ")||"No students assigned yet."}</div>
+ ${once?"":`<div class="small muted" style="margin-bottom:10px">${[c.startDate?"Starts on "+esc(fmtClassDate(c.startDate)):"",esc(pauseText(c))].filter(Boolean).join(" · ")}</div>`}<h3>Default students (${names.length})</h3><div class="small muted" style="margin:4px 0 12px">${names.map(esc).join(", ")||"No students assigned yet."}</div>
  ${c.notes?`<h3>Notes</h3><div class="small muted" style="margin:4px 0 12px">${esc(c.notes)}</div>`:""}
  <div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Close</button><button class="btn primary" onclick="closeModal();openClassAttendance('${id}')">Take Attendance</button></div>`);
 }
@@ -931,48 +1020,78 @@ function populateHistoryDates(preferred=""){
  d.innerHTML=sessions.length?sessions.map(r=>`<option value="${r.date}">${fmt(r.date)}</option>`).join(""):`<option value="">No recorded sessions</option>`;
  if(old&&sessions.some(r=>r.date===old))d.value=old;else if(sessions.length)d.value=sessions[sessions.length-1].date;
 }
-function historyClassChanged(){populateHistoryDates();renderHistory()}
+function historyClassChanged(){if(histMode!=="month")populateHistoryDates();renderHistory()}
 function historyMonthChanged(){if(histMode!=="month")populateHistoryDates();renderHistory()}
 function moveHistorySession(direction){
  let cid=$("histClass").value,month=$("histMonth").value||today().slice(0,7),sessions=recordedSessionsForClass(cid,month),current=$("histDate").value,i=sessions.findIndex(r=>r.date===current),next=sessions[i+direction];
  if(next){$("histDate").value=next.date;renderHistory()}
 }
 let histMode="class";
-function setHistoryMode(m){
+function setHistoryMode(m,date){
  histMode=m==="month"?"month":"class";
  $("histModeClass").classList.toggle("active",histMode==="class");
  $("histModeMonth").classList.toggle("active",histMode==="month");
- $("histClassWrap").style.display=$("histDateWrap").style.display=histMode==="month"?"none":"";
- if(histMode==="class")populateHistoryDates();
+ $("histDateWrap").style.display=histMode==="month"?"none":"";
+ if(histMode==="class")populateHistoryDates(date||"");
+ renderHistory();
+}
+function findSession(c,date){
+ const cands=db.attendance.filter(r=>r.date===date&&(r.classId===c.id||(r.className&&r.className===c.name)));
+ if(!cands.length)return null;
+ const score=r=>(r.status==="completed"?8:0)+(r.cancelled?6:0)+(r.records.some(a=>a.status)?4:0)+(r.classId===c.id?2:0);
+ return cands.slice().sort((a,b)=>score(b)-score(a))[0];
+}
+function daySessionState(c,date){
+ const r=findSession(c,date),t=today(),marked=!!(r&&r.records.some(a=>a.status));
+ const scheduled=classesForDate(date).some(x=>x.id===c.id);
+ if(r&&r.cancelled)return{r,cls:"cancelled",label:"Cancelled"};
+ if(r&&r.status==="completed")return{r,cls:"held",label:"Held"};
+ if(scheduled||marked){
+   if(date>t)return{r,cls:"upcoming",label:"Upcoming"};
+   if(date===t&&!marked)return{r,cls:"upcoming",label:"Today"};
+   return{r,cls:"open",label:marked?"Partly marked":"Not marked"};
+ }
+ if(classType(c)!=="once"&&classScheduledIgnoringPause(c,date)&&isPausedOn(c,date))return{r,cls:"paused",label:"Paused"};
+ return{r,cls:"",label:""};
+}
+function shiftHistoryMonth(n){
+ const [y,m]=($("histMonth").value||today().slice(0,7)).split("-").map(Number),d=new Date(y,m-1+n,1);
+ $("histMonth").value=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
  renderHistory();
 }
 function renderHistoryMonth(){
+ const c=db.classes.find(x=>x.id===$("histClass").value);
+ if(!c){$("historyArea").innerHTML=`<div class="card empty">Select a class to see its month calendar.</div>`;return}
  const month=$("histMonth").value||today().slice(0,7),[y,m]=month.split("-").map(Number),days=new Date(y,m,0).getDate(),t=today();
  const monthName=new Date(y,m-1,1).toLocaleDateString(undefined,{month:"long",year:"numeric"});
- let held=0,cancelled=0,upcoming=0,open=0,html="";
+ const offset=(new Date(y,m-1,1).getDay()+6)%7; // weeks start on Monday
+ let held=0,cancelled=0,open=0,cells="",notes=[];
+ for(let i=0;i<offset;i++)cells+="<div></div>";
  for(let d=1;d<=days;d++){
-   const date=`${month}-${String(d).padStart(2,"0")}`,entries=[],seen=new Set();
-   classesForDate(date).forEach(c=>{const r=getRecord(c.id,date);if(r)seen.add(r.id);entries.push({name:c.name||"Class",time:sessionTime(c,date),r})});
-   db.attendance.filter(r=>r.date===date&&!seen.has(r.id)).forEach(r=>{
-     const known=db.classes.some(x=>x.id===r.classId);
-     if(!known&&!r.cancelled&&r.status!=="completed"&&!r.records.some(a=>a.status))return; // empty leftovers from deleted classes
-     entries.push({name:r.className||(db.classes.find(x=>x.id===r.classId)||{}).name||"Class",time:r.time||"",r});
-   });
-   if(!entries.length)continue;
-   entries.sort((a,b)=>classTimeMinutes(a.time)-classTimeMinutes(b.time)||String(a.name).localeCompare(String(b.name)));
-   html+=`<div style="margin-top:14px"><h3${date===t?' style="color:var(--accent)"':""}>${esc(fmtClassDate(date))}${date===t?" · today":""}</h3><div class="list" style="margin-top:6px">`+entries.map(e=>{
-     const r=e.r;let label,cls;
-     if(r&&r.cancelled){label="Cancelled";cls="absent";cancelled++}
-     else if(r&&r.status==="completed"){label="Held";cls="present";held++}
-     else if(date>t){label="Upcoming";cls="pending";upcoming++}
-     else{label=r&&r.records.some(a=>a.status)?"Partly marked":"Not marked";cls="pending";open++}
-     const moved=r&&r.originalDate&&r.originalDate!==r.date;
-     return `<div class="list-item"><div class="row"><div><b>${esc(e.name)}</b>${e.time?` <span class="muted">· ${esc(e.time)}</span>`:""}${r&&r.time?` <span class="small muted">(time changed)</span>`:""}${moved?` <span class="small muted">· moved from ${esc(fmt(r.originalDate))}</span>`:""}</div><span class="badge ${cls}">${label}</span></div>${r&&r.cancelled&&r.cancelReason?`<div class="small muted" style="margin-top:4px">Reason: ${esc(r.cancelReason)}</div>`:""}${r&&r.notes?`<div class="small" style="margin-top:6px"><b>Notes:</b> ${esc(r.notes)}</div>`:""}</div>`;
-   }).join("")+`</div></div>`;
+   const date=`${month}-${String(d).padStart(2,"0")}`,st=daySessionState(c,date),r=st.r;
+   if(st.cls==="held")held++;else if(st.cls==="cancelled")cancelled++;else if(st.cls==="open")open++;
+   if(r&&r.notes)notes.push({date,text:r.notes});
+   const time=(r&&r.time)||(st.cls&&st.cls!=="paused"?c.time:"");
+   const clickable=!!st.cls&&st.cls!=="paused";
+   cells+=`<div class="cal-d ${st.cls} ${clickable?"click":""} ${date===t?"today":""}" ${clickable?`onclick="historyDayDetails('${c.id}','${date}')"`:""}><b>${d}</b>${r&&r.notes?'<i class="cal-note" title="Has notes">✎</i>':""}${st.label?`<span>${st.label}</span>`:""}${time&&clickable?`<span>${esc(time)}</span>`:""}</div>`;
  }
- const parts=[held&&`${held} held`,cancelled&&`${cancelled} cancelled`,upcoming&&`${upcoming} upcoming`,open&&`${open} not marked`].filter(Boolean);
- $("historyArea").innerHTML=html?`<div class="card"><h2>${esc(monthName)}</h2><div class="muted">${parts.join(" · ")}</div>${html}</div>`:`<div class="card empty">No classes are scheduled or recorded in ${esc(monthName)}.</div>`;
+ const summary=[held&&`${held} held`,cancelled&&`${cancelled} cancelled`,open&&`${open} not marked`].filter(Boolean).join(" · ")||"No lessons recorded this month";
+ $("historyArea").innerHTML=`<div class="card"><div class="row"><div><h2>${esc(c.name)}</h2><div class="muted">${summary}</div></div><div class="actions" style="align-items:center"><button class="btn" onclick="shiftHistoryMonth(-1)" title="Previous month">‹</button><b>${esc(monthName)}</b><button class="btn" onclick="shiftHistoryMonth(1)" title="Next month">›</button></div></div>
+ <div class="cal">${["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map(x=>`<div class="cal-h">${x}</div>`).join("")}${cells}</div>
+ <div class="cal-legend"><span><i style="background:#e3f4ea;border-color:#18794e"></i>Held</span><span><i style="background:#fdebea;border-color:#c0392b"></i>Cancelled</span><span><i style="background:#fff4d6;border-color:#e0a93b"></i>Not marked</span><span><i style="background:#fff;border-style:dashed"></i>Upcoming</span><span><i style="background:#e8ebee"></i>Paused</span><span>✎ has notes</span></div>
+ ${notes.length?`<h3 style="margin-top:16px">Notes this month</h3><div class="list" style="margin-top:6px">${notes.map(n=>`<div class="list-item"><b>${esc(fmtClassDate(n.date))}</b><div class="small" style="margin-top:3px">${esc(n.text)}</div></div>`).join("")}</div>`:""}</div>`;
 }
+function historyDayDetails(cid,date){
+ const c=db.classes.find(x=>x.id===cid);if(!c)return;
+ const st=daySessionState(c,date),r=st.r,badge=st.cls==="held"?"present":st.cls==="cancelled"?"absent":"pending";
+ const canView=!!r&&!r.cancelled&&date<=today();
+ openModal(`<h2>${esc(c.name)}</h2><div class="muted">${esc(fmtClassDate(date))}${(r&&r.time)||c.time?" · "+esc((r&&r.time)||c.time):""}</div>
+ <div style="margin:10px 0"><span class="badge ${badge}">${st.label}</span>${r&&r.time?' <span class="small muted">(time changed for this day)</span>':""}${r&&r.originalDate&&r.originalDate!==r.date?` <span class="small muted">Moved from ${esc(fmt(r.originalDate))}</span>`:""}</div>
+ ${r&&r.cancelled&&r.cancelReason?`<div class="small muted">Reason: ${esc(r.cancelReason)}</div>`:""}
+ ${r&&r.notes?`<h3 style="margin-top:10px">Notes</h3><div class="small" style="margin-top:4px">${esc(r.notes)}</div>`:`<div class="small muted" style="margin-top:6px">No notes for this day.</div>`}
+ <div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Close</button>${canView?`<button class="btn primary" onclick="openHistorySession('${c.id}','${date}')">View attendance</button>`:""}</div>`);
+}
+function openHistorySession(cid,date){closeModal();$("histClass").value=cid;setHistoryMode("class",date)}
 function renderHistory(){
  if(histMode==="month"){renderHistoryMonth();return}
  let cid=$("histClass").value,month=$("histMonth").value||today().slice(0,7),date=$("histDate").value;
