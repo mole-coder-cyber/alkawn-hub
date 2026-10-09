@@ -14,6 +14,11 @@ header{position:sticky;top:0;z-index:5;background:var(--text);color:#fff;padding
 .brand{font-weight:800;font-size:19px}.brand small{display:block;font-size:11px;font-weight:500;opacity:.7}
 .header-actions{display:flex;gap:7px;flex-wrap:wrap}
 .status-text{align-self:center;font-size:12px;color:#8e99a6;margin-right:4px;opacity:0;transition:opacity .35s;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.status-text.show{opacity:1}
+.search-wrap{position:relative;display:block}
+.search-wrap>input{width:100%;box-sizing:border-box;padding-right:32px}
+.search-wrap .search-clear{display:none;position:absolute;right:5px;top:50%;transform:translateY(-50%);width:26px;height:26px;padding:0;border:0;border-radius:50%;background:transparent;color:#7a8590;font-size:19px;line-height:24px;text-align:center;cursor:pointer}
+.search-wrap .search-clear:hover{background:#e8ebee;color:#33404c}
+.class-student-row input.seStudent{width:auto;flex:0 0 auto;margin:0}
 .cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;margin-top:12px}
 .cal-h{font-size:11px;text-align:center;color:#6b7683;padding:2px 0;font-weight:600}
 .cal-d{min-height:66px;border:1px solid var(--line);border-radius:8px;padding:4px 5px;font-size:11px;background:#fafbfc;overflow:hidden;position:relative;line-height:1.25}
@@ -62,7 +67,7 @@ dialog{border:0;border-radius:13px;padding:0;width:min(560px,calc(100% - 24px));
 </div>
 <div id="app" class="app hidden">
 <header>
-  <div class="brand">Alkawn Hub <small>Attendance · v2026-10-09</small></div>
+  <div class="brand">Alkawn Hub <small>Attendance · v2026-10-10</small></div>
   <div class="header-actions">
     <span id="syncBadge" class="sync-badge"></span>
     <span id="statusText" class="status-text" aria-live="polite"></span>
@@ -105,7 +110,8 @@ dialog{border:0;border-radius:13px;padding:0;width:min(560px,calc(100% - 24px));
         <div><label>Label</label><select id="studentLabelFilter" onchange="renderStudents()"></select></div>
       </div>
     </div>
-    <div id="studentsArea" class="list" style="margin-top:14px"></div>
+    <div id="studentCount" class="small muted" style="margin:10px 2px 0"></div>
+    <div id="studentsArea" class="list" style="margin-top:8px"></div>
   </section>
 
   <section id="programs" class="view">
@@ -555,7 +561,19 @@ function toast(t){
  const long=/fail|could not|error|paused|not saved/i.test(t);
  statusTimer=setTimeout(()=>x.classList.remove("show"),long?10000:4000);
 }
-function openModal(html){$("modalBody").innerHTML=html;$("modal").showModal()}
+function enhanceSearchInputs(root){
+ (root||document).querySelectorAll('input[placeholder^="Search"]:not([data-clear-ready])').forEach(inp=>{
+   inp.setAttribute("data-clear-ready","1");
+   const wrap=document.createElement("span");wrap.className="search-wrap";
+   inp.parentNode.insertBefore(wrap,inp);wrap.appendChild(inp);
+   const b=document.createElement("button");b.type="button";b.className="search-clear";b.setAttribute("aria-label","Clear search");b.title="Clear";b.textContent="\u00d7";
+   const sync=()=>{b.style.display=inp.value?"block":"none"};
+   b.onclick=()=>{inp.value="";sync();inp.dispatchEvent(new Event("input",{bubbles:true}));inp.focus()};
+   inp.addEventListener("input",sync);inp.addEventListener("change",sync);
+   wrap.appendChild(b);sync();
+ });
+}
+function openModal(html){$("modalBody").innerHTML=html;enhanceSearchInputs($("modalBody"));$("modal").showModal()}
 function closeModal(){$("modal").close()}
 $("modal").addEventListener("click",e=>{if(e.target===$("modal"))closeModal()})
 
@@ -756,21 +774,31 @@ function saveTemporary(classId,date){let name=$("tempName").value.trim();if(!nam
 function editSession(classId,date){
  const c=db.classes.find(x=>x.id===classId),r=ensureRecord(classId,date);if(!c||!r)return;
  const inSession=new Set(r.records.filter(a=>!a.temporary).map(a=>a.studentId));
- const list=db.students.filter(s=>s.active||inSession.has(s.id)).slice().sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+ const list=db.students.filter(s=>s.active||inSession.has(s.id)).slice().sort((a,b)=>String(a.name).localeCompare(String(b.name),undefined,{sensitivity:"base"}));
  const completed=r.status==="completed";
+ const opts=list.map(s=>`<label class="class-student-row" data-student-name="${esc(String(s.name).toLowerCase())}" data-program-id="${esc(s.programId||"")}" data-label-ids="${esc((s.labelIds||[]).join(","))}"><input class="seStudent" type="checkbox" value="${s.id}" ${inSession.has(s.id)?"checked":""} onchange="updateSessionCount()"> <span>${esc(s.name)}</span></label>`).join("");
  openModal(`<h2>Edit this day</h2><div class="muted small">${esc(c.name)} · ${esc(fmt(date))}. Changes here only apply to this day, not to the class itself.</div>
  <div class="grid two" style="margin-top:10px"><div><label>Time</label><input id="seTime" type="time" value="${esc(r.time||c.time||"")}"></div><div><label>Day (date)</label><input id="seDate" type="date" value="${esc(date)}" ${completed?"disabled":""}></div></div>
  ${completed?`<div class="small muted" style="margin-top:4px">To move this lesson to another day, reopen the attendance first.</div>`:""}
- <label>Students coming <span id="seCount" class="small muted"></span></label>
- <input id="seSearch" placeholder="Search students..." oninput="filterSessionStudents()" style="margin-bottom:6px">
- <div id="seStudents" style="max-height:220px;overflow:auto;border:1px solid var(--line);border-radius:9px;padding:4px 8px">${list.map(s=>`<label class="seRow" data-name="${esc(String(s.name).toLowerCase())}" style="display:flex;align-items:center;gap:8px;padding:6px 2px;margin:0"><input type="checkbox" class="seStudent" value="${s.id}" ${inSession.has(s.id)?"checked":""} onchange="updateSessionCount()" style="width:auto"> ${esc(s.name)}</label>`).join("")||`<div class="small muted" style="padding:8px">No students yet.</div>`}</div>
+ <label>Find students</label><div class="class-filter-row"><input id="seSearch" placeholder="Search students..." oninput="filterSessionStudents()"><select id="seProgramFilter" onchange="seProgramFilterChanged()"></select><select id="seLabelFilter" onchange="filterSessionStudents()"></select></div>
+ <div id="seStudents" class="class-student-list">${opts||`<div class="small muted">No students yet.</div>`}</div>
+ <div id="seCount" class="small muted" style="margin-top:7px">${inSession.size} selected</div>
  <div class="small muted" style="margin-top:4px">Temporary students are added or removed with the buttons on the attendance page.</div>
  <label>Notes for this day</label><textarea id="seNotes" placeholder="e.g. Moved under the shelter because of rain">${esc(r.notes||"")}</textarea>
  <div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveSession('${classId}','${date}')">Save</button></div>`);
+ populateProgramSelect("seProgramFilter","",true);populateLabelSelect("seLabelFilter","",true,"");
  updateSessionCount();
 }
-function updateSessionCount(){const n=document.querySelectorAll(".seStudent:checked").length;const e=$("seCount");if(e)e.textContent="("+n+" selected)"}
-function filterSessionStudents(){const q=($("seSearch").value||"").toLowerCase().trim();document.querySelectorAll("#seStudents .seRow").forEach(x=>{x.style.display=(!q||x.dataset.name.includes(q))?"flex":"none"})}
+function updateSessionCount(){const n=document.querySelectorAll("#seStudents .seStudent:checked").length;const e=$("seCount");if(e)e.textContent=`${n} selected`}
+function seProgramFilterChanged(){populateLabelSelect("seLabelFilter","",true,$("seProgramFilter").value);filterSessionStudents()}
+function filterSessionStudents(){
+ const q=($("seSearch")?.value||"").toLowerCase().trim(),p=$("seProgramFilter")?.value||"",l=$("seLabelFilter")?.value||"";
+ document.querySelectorAll("#seStudents .class-student-row").forEach(row=>{
+   const labels=(row.dataset.labelIds||"").split(",").filter(Boolean),name=row.dataset.studentName||"";
+   row.style.display=(!q||name.includes(q))&&(!p||row.dataset.programId===p)&&(!l||labels.includes(l))?"flex":"none";
+ });
+ updateSessionCount();
+}
 function saveSession(classId,date){
  const c=db.classes.find(x=>x.id===classId),r=getRecord(classId,date);if(!c||!r)return;
  const time=$("seTime").value||"",notes=$("seNotes").value.trim();
@@ -834,7 +862,11 @@ function openStudent(id=""){
  openModal(`<h2>${id?"Edit":"Add"} Student</h2><label>Name</label><input id="sName" value="${esc(s.name)}" placeholder="Full name"><label>Program</label><select id="sProgram" onchange="renderStudentLabelDropdown(this.value,[])"></select><label>Labels</label><div class="small muted">Optional. Select one or more labels from the selected program.</div><div id="studentLabelArea" style="margin-top:7px"></div><label>Status</label><select id="sActive"><option value="true" ${s.active?"selected":""}>Active</option><option value="false" ${!s.active?"selected":""}>Inactive</option></select><label>Notes</label><textarea id="sNotes" placeholder="Optional">${esc(s.notes||"")}</textarea><div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveStudent('${id}')">Save</button></div>`);
  populateProgramSelect("sProgram",s.programId,false);renderStudentLabelDropdown(s.programId,s.labelIds||[]);
 }
-function saveStudent(id){let name=$("sName").value.trim();if(!name){alert("Enter a student name.");return}let programId=$("sProgram").value;let validLabels=new Set(labelsForProgram(programId).map(l=>l.id));let labelIds=[...document.querySelectorAll(".studentLabel:checked")].map(x=>x.value).filter(x=>validLabels.has(x));let obj={name,active:$("sActive").value==="true",notes:$("sNotes").value,programId,labelIds};if(id){let st=db.students.find(x=>x.id===id);Object.assign(st,obj)}else db.students.push({id:uid(),...obj});save();closeModal();populateStudentFilters();renderStudents();renderClasses();toast("Student saved")}
+function saveStudent(id){let name=$("sName").value.trim();if(!name){alert("Enter a student name.");return}
+ name=name.replace(/\s+/g," ");
+ const norm=x=>String(x||"").trim().replace(/\s+/g," ").toLowerCase();
+ if(db.students.some(x=>x.id!==id&&norm(x.name)===norm(name))){alert(`A student named "${name}" already exists.\n\nEvery student needs a different name (capital letters don't count as different). Add a surname or initial, for example "${name} K".`);return}
+ let programId=$("sProgram").value;let validLabels=new Set(labelsForProgram(programId).map(l=>l.id));let labelIds=[...document.querySelectorAll(".studentLabel:checked")].map(x=>x.value).filter(x=>validLabels.has(x));let obj={name,active:$("sActive").value==="true",notes:$("sNotes").value,programId,labelIds};if(id){let st=db.students.find(x=>x.id===id);Object.assign(st,obj)}else db.students.push({id:uid(),...obj});save();closeModal();populateStudentFilters();renderStudents();renderClasses();toast("Student saved")}
 function deleteStudent(id){
  let s=db.students.find(x=>x.id===id);if(!s)return;
  openModal(`<h2>Delete Student?</h2><div class="muted">Are you sure you want to delete <b>${esc(s.name)}</b>?</div><div class="small muted" style="margin-top:10px">The student will be removed from the Students list, from class lists, and from lessons whose attendance has not been marked yet. Attendance that was already marked stays in the history.</div><div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Keep Student</button><button class="btn danger" onclick="confirmDeleteStudent('${id}')">Yes, Delete Student</button></div>`);
@@ -854,6 +886,8 @@ function renderStudents(){
  let q=($("studentSearch")?.value||"").toLowerCase().trim(),programId=$("studentProgramFilter")?.value||"",labelId=$("studentLabelFilter")?.value||"";
  let arr=db.students.filter(s=>{let labels=s.labelIds||[];return (!q||s.name.toLowerCase().includes(q))&&(!programId||s.programId===programId)&&(!labelId||labels.includes(labelId))});
  arr.sort((a,b)=>a.name.localeCompare(b.name,undefined,{sensitivity:"base"}));
+ {const total=db.students.length,word=total===1?"student":"students",filtered=!!(q||programId||labelId);
+  $("studentCount").textContent=filtered?`Showing ${arr.length} of ${total} ${word}`:`Showing all ${total} ${word}`;}
  $("studentsArea").innerHTML=arr.length?arr.map(s=>{let p=programById(s.programId),labels=studentLabels(s),st=attendanceStats(s.id);return `<div class="list-item clickable" onclick="studentProfile('${s.id}')"><div class="row"><div><b>${esc(s.name)}</b><div class="small muted">${p?`<span class="tag-chip" style="${tagStyle("program",p.colorIndex)}">${esc(p.name)}</span>`:'<span class="muted">No program</span>'} · ${s.active?"Active":"Inactive"} · ${st.attended}/${st.total} attended</div>${labels.length?`<div class="tag-list" style="margin-top:5px;display:flex;gap:5px;flex-wrap:wrap">${labels.map(l=>`<span class="tag-chip" style="${tagStyle("label",l.colorIndex)}">${esc(l.name)}</span>`).join("")}</div>`:""}${s.notes?`<div class="small muted" style="margin-top:7px"><b>Notes:</b> ${esc(s.notes)}</div>`:""}</div><span class="badge ${s.active?"present":"inactive"}">${s.active?"Active":"Inactive"}</span></div></div>`}).join(""):`<div class="card empty">No students match these filters.</div>`
 }
 
@@ -1002,7 +1036,7 @@ function recordedSessionsForClass(classId,month=""){
 }
 function populateHistorySelectors(){
  let c=$("histClass"),old=c.value;
- c.innerHTML='<option value="">Select a class</option>'+db.classes.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join("");
+ c.innerHTML='<option value="">Select a class</option>'+db.classes.slice().sort((a,b)=>String(a.name||"").localeCompare(String(b.name||""),undefined,{sensitivity:"base",numeric:true})).map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join("");
  if(old&&db.classes.some(x=>x.id===old))c.value=old;
  $("histMonth").value=$("histMonth").value||today().slice(0,7);
  populateHistoryDates();
@@ -1224,6 +1258,7 @@ async function restoreFromBackup(x){
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
 $("attDate").value=today();
 // Keep the existing local data available as a safety net until cloud data is loaded.
+enhanceSearchInputs();
 showAuth();
 
 </script>
