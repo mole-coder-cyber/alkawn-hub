@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#18212b">
 <link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <title>Alkawn Hub — Attendance</title>
 <style>
 :root{--bg:#f4f6f8;--card:#fff;--text:#18212b;--muted:#66717d;--line:#dfe4e8;--accent:#315f78;--good:#18794e;--bad:#b42318;--warn:#9a6700;--shadow:0 2px 12px #0000000d}
@@ -67,7 +69,7 @@ dialog{border:0;border-radius:13px;padding:0;width:min(560px,calc(100% - 24px));
 </div>
 <div id="app" class="app hidden">
 <header>
-  <div class="brand">Alkawn Hub <small>Attendance · v2026-10-10</small></div>
+  <div class="brand">Alkawn Hub <small>Attendance · v2026-10-11</small></div>
   <div class="header-actions">
     <span id="syncBadge" class="sync-badge"></span>
     <span id="statusText" class="status-text" aria-live="polite"></span>
@@ -168,6 +170,7 @@ let cloudChecking=false;
 let cloudOffline=false;
 let cloudRetryTimer=null;
 let cloudRetryDelay=5000;
+let cloudSaveProblem="";
 const META_KEY="alkawnSyncMetaV1",BASE_KEY="alkawnSyncBaseV1";
 const KEY="alkawnAttendanceV1";
 let db=load();
@@ -194,7 +197,9 @@ function persistSync(){
 }
 function updateSyncBadge(){
  const b=$("syncBadge");if(!b)return;
- if(cloudOffline){b.textContent="● Offline – changes will sync when you reconnect";b.style.display="inline"}
+ b.title="";
+ if(cloudOffline){b.textContent="● Offline – changes will sync when you reconnect";b.style.color="#e0a93b";b.style.display="inline"}
+ else if(cloudSaveProblem){b.textContent="⚠ Changes not saved to the cloud – retrying";b.title=cloudSaveProblem;b.style.color="#f08a7e";b.style.display="inline"}
  else b.style.display="none";
 }
 function goOffline(){
@@ -203,6 +208,17 @@ function goOffline(){
  clearTimeout(cloudRetryTimer);
  cloudRetryTimer=setTimeout(()=>{if(cloudDirty&&cloudReady)saveCloudData();else checkForCloudUpdates()},cloudRetryDelay);
  cloudRetryDelay=Math.min(cloudRetryDelay*2,30000);
+}
+function scheduleRetry(){
+ clearTimeout(cloudRetryTimer);
+ cloudRetryTimer=setTimeout(()=>{if(cloudDirty&&cloudReady)saveCloudData()},cloudRetryDelay);
+ cloudRetryDelay=Math.min(cloudRetryDelay*2,60000);
+}
+function reportSaveProblem(msg){
+ cloudSaveProblem=String(msg||"unknown error");
+ updateSyncBadge();
+ toast("Cloud save failed: "+cloudSaveProblem);
+ scheduleRetry();
 }
 function backOnline(msg){
  if(!cloudOffline)return;
@@ -310,13 +326,14 @@ async function saveCloudData(){
    if(seq===cloudChangeSeq)cloudDirty=false;
    persistSync();
    cloudRetryDelay=5000;
+   if(cloudSaveProblem){cloudSaveProblem="";updateSyncBadge();toast("Saved to the cloud")}
    if(cloudOffline)backOnline("Back online — your changes are synced");
    scheduleAutoBackup();
  }catch(e){
    console.error("Cloud save error:",e);
    if(isNetworkError(e))goOffline();
    else if(isAuthError(e))handleLoginExpired();
-   else toast("Cloud save failed: "+(e.message||e));
+   else reportSaveProblem(e.message||e);
  }finally{
    cloudSaving=false;
    if(cloudSaveQueued&&!cloudConflict){cloudSaveQueued=false;scheduleCloudSave()}
@@ -353,7 +370,7 @@ async function handleCloudConflict(){
    console.error("Cloud conflict merge error:",e);
    cloudConflict=false;
    if(isNetworkError(e))goOffline();
-   else toast("Could not merge cloud changes: "+(e.message||e));
+   else reportSaveProblem("could not merge cloud changes ("+(e.message||e)+")");
  }
 }
 async function refreshFromCloud(showToast){
@@ -519,19 +536,13 @@ function migrateData(){
  db.programs=Array.isArray(db.programs)?db.programs:[];
  db.students.forEach(s=>{if(!Array.isArray(s.labelIds))s.labelIds=[];if(s.programId===undefined)s.programId="";delete s.subcategory});
  db.classes.forEach(c=>{if(!Array.isArray(c.days))c.days=c.day?[c.day]:[];if(c.day===undefined)c.day=c.days[0]||"";if(c.programId===undefined)c.programId="";if(c.listMode===undefined)c.listMode="manual";if(c.defaultLabelId===undefined)c.defaultLabelId=""});
- const resetKey="alkawnTaxonomyResetV11";
- if(!localStorage.getItem(resetKey)){
-   db.programs=[];
-   db.students.forEach(s=>{s.programId="";s.labelIds=[];delete s.subcategory});
-   db.classes.forEach(c=>{c.programId="";c.defaultLabelId="";if(c.listMode==="label")c.listMode="manual"});
-   localStorage.setItem(resetKey,"1");
- }
  db.programs.forEach((p,pi)=>{if(!Array.isArray(p.labels))p.labels=[];if(p.colorIndex===undefined)p.colorIndex=pi%10;p.labels.forEach((l,li)=>{if(l.colorIndex===undefined)l.colorIndex=li%10})});
  delete db.labels;
  save();
 }
 migrateData();
-function today(){return new Date().toISOString().slice(0,10)}
+function localDateStr(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
+function today(){return localDateStr(new Date())} // the date on the device's own clock (not UTC)
 function programById(id){return db.programs.find(p=>p.id===id)}
 function labelById(id){for(const p of db.programs){const l=(p.labels||[]).find(x=>x.id===id);if(l)return l}return null}
 function labelsForProgram(programId){return programById(programId)?.labels||[]}
@@ -915,7 +926,7 @@ function studentMonthStats(id,month){
 function changeStudentMonth(id,direction){
  let input=$("studentMonth");if(!input)return;
  let d=new Date((input.value||today().slice(0,7))+"-01T12:00:00");d.setMonth(d.getMonth()+direction);
- input.value=d.toISOString().slice(0,7);renderStudentProfile(id);
+ input.value=localDateStr(d).slice(0,7);renderStudentProfile(id);
 }
 function studentMonthWheel(e,id){
  e.preventDefault();e.stopPropagation();
