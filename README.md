@@ -9,14 +9,15 @@ A single-page web app for running classes: attendance, students, classes, progra
 **Attendance**
 - Pick a date and a class, then mark each student present or absent (with an optional absence reason).
 - Complete or reopen a class's attendance, cancel a lesson (with a reason), and add temporary students.
+- A lesson with only one student (for example a private lesson) has no Present/Absent buttons: you complete the lesson as a whole, which counts the student as attended. If the student cannot come, cancel the lesson with a reason.
 - **Edit this day**: change the time, move the lesson to another day, change who is coming, and write notes for that one day. This never changes the recurring class itself.
 - The class list shows a green tick for classes already marked, and a line such as "2 classes left to mark" or "Tuesday attendance complete".
 
 **Students, programs and labels**
 - Students belong to one program and can have that program's labels. Student names must be unique (capitals and extra spaces do not count as different).
-- The Students tab shows how many students are being shown, with search plus program and label filters.
+- The Students tab shows how many students are being shown, with search plus program and label filters, and an **Active / Inactive / All** view switch.
 - Deleting a student removes them from lessons that have not been marked; attendance already marked stays in the history.
-- **Inactive students**: set a student to Inactive when they stop coming. They keep all their history and stay on their classes, but no longer appear in today's or future attendance, or in class default lists. Set them back to Active when they return. The Students tab has a "Show inactive students" switch (off by default).
+- **Inactive students**: set a student to Inactive when they stop coming. They keep all their history and stay on their classes, but no longer appear in today's or future attendance, or in class default lists. Set them back to Active when they return. The Students tab shows Active students by default; the Inactive view lists everyone who is inactive.
 
 **Classes**
 - Recurring (chosen weekdays) or once-off (one date). A new recurring class only appears from its start date.
@@ -96,7 +97,7 @@ On a phone or laptop the page offers an **Install app** button (in the header, a
 
 1. Replace the changed files in the repository and commit.
 2. Reload the app **twice** on each device (the first load installs the new version, the second runs it).
-3. Check the version label under the app name (for example `v2026-10-12`). If it is old, hard-refresh (Ctrl+Shift+R) or clear the site's data; the cloud data is not affected.
+3. Check the version label under the app name (for example `v2026-10-13`). If it is old, hard-refresh (Ctrl+Shift+R) or clear the site's data; the cloud data is not affected.
 
 Please update all devices after a release. An old copy of the app cannot use newer features and does not have the newest safety checks.
 
