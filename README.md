@@ -16,6 +16,7 @@ A single-page web app for running classes: attendance, students, classes, progra
 - Students belong to one program and can have that program's labels. Student names must be unique (capitals and extra spaces do not count as different).
 - The Students tab shows how many students are being shown, with search plus program and label filters.
 - Deleting a student removes them from lessons that have not been marked; attendance already marked stays in the history.
+- **Inactive students**: set a student to Inactive when they stop coming. They keep all their history and stay on their classes, but no longer appear in today's or future attendance, or in class default lists. Set them back to Active when they return. The Students tab has a "Show inactive students" switch (off by default).
 
 **Classes**
 - Recurring (chosen weekdays) or once-off (one date). A new recurring class only appears from its start date.
@@ -87,11 +88,15 @@ where table_schema = 'public' and table_name = 'alkawn_data';
 
 Finally, create a second test account and confirm it cannot see the first account's students.
 
+## Installing the app
+
+On a phone or laptop the page offers an **Install app** button (in the header, and on the login page) whenever the browser allows installing. A progress window shows the install working and tells you when it is finished. On iPhone/iPad, Safari has no install prompt, so the button shows the steps: Share → Add to Home Screen. Browsers that cannot install the app (for example desktop Firefox) simply do not show the button.
+
 ## Updating the app
 
 1. Replace the changed files in the repository and commit.
 2. Reload the app **twice** on each device (the first load installs the new version, the second runs it).
-3. Check the version label under the app name (for example `v2026-10-11`). If it is old, hard-refresh (Ctrl+Shift+R) or clear the site's data; the cloud data is not affected.
+3. Check the version label under the app name (for example `v2026-10-12`). If it is old, hard-refresh (Ctrl+Shift+R) or clear the site's data; the cloud data is not affected.
 
 Please update all devices after a release. An old copy of the app cannot use newer features and does not have the newest safety checks.
 
@@ -103,7 +108,8 @@ Open the app online once (twice after an update) on each device so it can save a
 
 - One login equals one set of data; there are no separate roles or shared accounts yet.
 - When two devices change the very same item at the same moment, the cloud value wins (a backup of the other version is downloaded).
-- Duplicate student names are blocked when saving a student, but two devices adding the same new name at the same moment while offline could still create a duplicate after the merge.
+- If two devices open the same lesson at the same moment, two copies can briefly exist. They are combined automatically the next time a device loads or refreshes, keeping the one with attendance marked.
+- Duplicate student names are blocked when saving a student (the form shows the problem in red), but two devices adding the same new name at the same moment while offline could still create a duplicate after the merge.
 - Payments, venues and the wider business modules are not part of this attendance version.
 
 ## Testing

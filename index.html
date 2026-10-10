@@ -16,6 +16,21 @@ header{position:sticky;top:0;z-index:5;background:var(--text);color:#fff;padding
 .brand{font-weight:800;font-size:19px}.brand small{display:block;font-size:11px;font-weight:500;opacity:.7}
 .header-actions{display:flex;gap:7px;flex-wrap:wrap}
 .status-text{align-self:center;font-size:12px;color:#8e99a6;margin-right:4px;opacity:0;transition:opacity .35s;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.status-text.show{opacity:1}
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid #cbd2d8;border-top-color:#315f78;border-radius:50%;animation:spin .8s linear infinite;vertical-align:-2px}
+.install-btn .spinner{border-color:#ffffff55;border-top-color:#fff}
+@keyframes spin{to{transform:rotate(360deg)}}
+.indet{height:6px;border-radius:3px;background:#e8ebee;overflow:hidden;margin:12px 0}
+.indet>div{height:100%;width:40%;background:#315f78;animation:slide 1.2s ease-in-out infinite}
+@keyframes slide{0%{margin-left:-40%}100%{margin-left:100%}}
+.inst-step{display:flex;align-items:center;gap:8px;padding:6px 0}
+.inst-ok{color:#18794e;font-weight:700}
+.switch{display:inline-flex;align-items:center;gap:9px;font-size:14px;cursor:pointer;user-select:none;margin:0}
+.switch input{appearance:none;-webkit-appearance:none;width:38px;height:22px;padding:0;border:0;border-radius:999px;background:#cbd2d8;position:relative;margin:0;flex:0 0 auto;transition:background .2s;cursor:pointer}
+.switch input::after{content:"";position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .2s;box-shadow:0 1px 3px #0003}
+.switch input:checked{background:var(--accent)}
+.switch input:checked::after{left:18px}
+input.input-error{border-color:#d92d20;background:#fff5f4;box-shadow:0 0 0 3px #fdebea;outline:none}
+.field-error{color:#b42318;font-size:13px;margin-top:5px}
 .search-wrap{position:relative;display:block}
 .search-wrap>input{width:100%;box-sizing:border-box;padding-right:32px}
 .search-wrap .search-clear{display:none;position:absolute;right:5px;top:50%;transform:translateY(-50%);width:26px;height:26px;padding:0;border:0;border-radius:50%;background:transparent;color:#7a8590;font-size:19px;line-height:24px;text-align:center;cursor:pointer}
@@ -64,15 +79,17 @@ dialog{border:0;border-radius:13px;padding:0;width:min(560px,calc(100% - 24px));
       <button class="btn primary" onclick="signIn()">Log In</button>
       <button class="btn" onclick="signUp()">Create Account</button>
     </div>
+    <button id="installBtnAuth" class="btn install-btn" onclick="installApp()" style="display:none;margin-top:12px;width:100%">⬇ Install the app on this device</button>
     <div id="authStatus" class="auth-status hidden"></div>
   </div>
 </div>
 <div id="app" class="app hidden">
 <header>
-  <div class="brand">Alkawn Hub <small>Attendance · v2026-10-11</small></div>
+  <div class="brand">Alkawn Hub <small>Attendance · v2026-10-12</small></div>
   <div class="header-actions">
     <span id="syncBadge" class="sync-badge"></span>
     <span id="statusText" class="status-text" aria-live="polite"></span>
+    <button id="installBtn" class="install-btn" onclick="installApp()" style="display:none">⬇ Install app</button>
     <button onclick="backupNow()" title="Save a backup file. On Chrome/Edge it always overwrites the same file.">Backup</button>
     <button onclick="document.getElementById('importFile').click()">Restore</button>
     <button onclick="signOut()">Log Out</button>
@@ -112,7 +129,8 @@ dialog{border:0;border-radius:13px;padding:0;width:min(560px,calc(100% - 24px));
         <div><label>Label</label><select id="studentLabelFilter" onchange="renderStudents()"></select></div>
       </div>
     </div>
-    <div id="studentCount" class="small muted" style="margin:10px 2px 0"></div>
+    <div style="margin:12px 2px 0"><label class="switch"><input type="checkbox" id="studentShowInactive" onchange="renderStudents()"> <span id="studentInactiveLabel">Show inactive students</span></label></div>
+    <div id="studentCount" class="small muted" style="margin:8px 2px 0"></div>
     <div id="studentsArea" class="list" style="margin-top:8px"></div>
   </section>
 
@@ -171,6 +189,7 @@ let cloudOffline=false;
 let cloudRetryTimer=null;
 let cloudRetryDelay=5000;
 let cloudSaveProblem="";
+let needsCloudSave=false;
 const META_KEY="alkawnSyncMetaV1",BASE_KEY="alkawnSyncBaseV1";
 const KEY="alkawnAttendanceV1";
 let db=load();
@@ -472,12 +491,14 @@ async function initializeCloudUser(user){
        db=mergeThreeWay(readSyncBase()||{},db,data.data,conflicts);
        cloudDirty=true;
      }else{db=data.data;cloudDirty=false}
+     needsCloudSave=false;
      migrateData();
      localStorage.setItem(KEY,JSON.stringify(db));
      cloudVersion=data.updated_at;cloudBaseData=cloneData(data.data);
      cloudReady=true;cloudOffline=false;updateSyncBadge();persistSync();
      showApp();
      renderAll();
+     if(needsCloudSave){needsCloudSave=false;scheduleCloudSave()}
      if(before){
        if(conflicts.length){
          try{const merged=db;db=before;exportData();db=merged}catch(e){console.error(e)}
@@ -538,6 +559,7 @@ function migrateData(){
  db.classes.forEach(c=>{if(!Array.isArray(c.days))c.days=c.day?[c.day]:[];if(c.day===undefined)c.day=c.days[0]||"";if(c.programId===undefined)c.programId="";if(c.listMode===undefined)c.listMode="manual";if(c.defaultLabelId===undefined)c.defaultLabelId=""});
  db.programs.forEach((p,pi)=>{if(!Array.isArray(p.labels))p.labels=[];if(p.colorIndex===undefined)p.colorIndex=pi%10;p.labels.forEach((l,li)=>{if(l.colorIndex===undefined)l.colorIndex=li%10})});
  delete db.labels;
+ if(dedupeAttendance()>0)needsCloudSave=true;
  save();
 }
 migrateData();
@@ -692,12 +714,52 @@ function populateSelectors(){
 function attendanceDateChanged(){populateSelectors();renderAttendance()}
 function openQuickSession(){showView("attendance");$("attDate").value=today();populateSelectors();renderAttendance()}
 function sessionKey(classId,date){return classId+"|"+date}
+function studentById(id){return db.students.find(s=>s.id===id)}
+// A student is "on the list" for a date unless they were inactive on that date. Past dates before they became inactive still include them.
+function studentActiveOn(id,date){
+ const s=studentById(id);if(!s)return false;
+ const gaps=Array.isArray(s.gaps)?s.gaps:[];
+ if(gaps.some(g=>g.from&&date>=g.from&&(!g.to||date<g.to)))return false;
+ if(s.active===false&&!gaps.some(g=>!g.to))return false; // older inactive students with no recorded date
+ return true;
+}
+function activeClassStudentIds(c){return (c.studentIds||[]).filter(id=>{const s=studentById(id);return s&&s.active!==false})}
+function removeStudentFromUpcomingLessons(id,fromDate){
+ db.attendance.forEach(r=>{
+   if(r.status==="completed"||r.cancelled||r.date<fromDate)return;
+   r.records=r.records.filter(a=>!(a.studentId===id&&!a.temporary&&!a.status));
+ });
+}
+function sessionScore(r){return (r.status==="completed"?8:0)+(r.cancelled?6:0)+(r.records.some(a=>a.status)?4:0)+(r.notes?1:0)}
+// If two records exist for the same class and day (can happen when two devices open a lesson at the same moment), keep one and combine them.
+function dedupeAttendance(){
+ const groups=new Map();
+ db.attendance.forEach(r=>{if(!r.classId||!r.date)return;const k=r.classId+"|"+r.date;if(!groups.has(k))groups.set(k,[]);groups.get(k).push(r)});
+ const drop=new Set();
+ groups.forEach(list=>{
+   if(list.length<2)return;
+   const ordered=list.slice().sort((a,b)=>sessionScore(b)-sessionScore(a)),keep=ordered[0];
+   ordered.slice(1).forEach(dup=>{
+     (dup.records||[]).forEach(a=>{
+       const mine=keep.records.find(x=>x.studentId===a.studentId);
+       if(!mine){if(!(keep.removedIds||[]).includes(a.studentId))keep.records.push(a)}
+       else if(!mine.status&&a.status){mine.status=a.status;if(a.reason)mine.reason=a.reason}
+     });
+     if(!keep.notes&&dup.notes)keep.notes=dup.notes;
+     if(!keep.time&&dup.time)keep.time=dup.time;
+     if(!keep.originalDate&&dup.originalDate)keep.originalDate=dup.originalDate;
+     drop.add(dup);
+   });
+ });
+ if(drop.size)db.attendance=db.attendance.filter(r=>!drop.has(r));
+ return drop.size;
+}
 function getRecord(classId,date){return db.attendance.find(x=>x.classId===classId&&x.date===date)}
 function ensureRecord(classId,date){
  let c=db.classes.find(x=>x.id===classId);if(!c)return null;
  let r=getRecord(classId,date);
  if(!r){
-   r={id:uid(),classId,date,className:c.name,status:date>today()?"planned":"open",cancelled:false,cancelReason:"",records:c.studentIds.map(studentId=>({studentId,status:null,reason:"",temporary:false}))};
+   r={id:uid(),classId,date,className:c.name,status:date>today()?"planned":"open",cancelled:false,cancelReason:"",records:c.studentIds.filter(studentId=>studentActiveOn(studentId,date)).map(studentId=>({studentId,status:null,reason:"",temporary:false}))};
    db.attendance.push(r);save();
    return r;
  }
@@ -706,6 +768,7 @@ function ensureRecord(classId,date){
  let changed=false;
  c.studentIds.forEach(studentId=>{
    if((r.removedIds||[]).includes(studentId))return; // taken off this day's list on purpose
+   if(!studentActiveOn(studentId,date))return; // inactive on this day
    if(!r.records.some(a=>a.studentId===studentId)){
      r.records.push({studentId,status:null,reason:"",temporary:false});
      changed=true;
@@ -870,14 +933,39 @@ function renderStudentLabelDropdown(programId,selectedIds=[]){
 }
 function openStudent(id=""){
  let s=db.students.find(x=>x.id===id)||{name:"",active:true,notes:"",programId:"",labelIds:[]};
- openModal(`<h2>${id?"Edit":"Add"} Student</h2><label>Name</label><input id="sName" value="${esc(s.name)}" placeholder="Full name"><label>Program</label><select id="sProgram" onchange="renderStudentLabelDropdown(this.value,[])"></select><label>Labels</label><div class="small muted">Optional. Select one or more labels from the selected program.</div><div id="studentLabelArea" style="margin-top:7px"></div><label>Status</label><select id="sActive"><option value="true" ${s.active?"selected":""}>Active</option><option value="false" ${!s.active?"selected":""}>Inactive</option></select><label>Notes</label><textarea id="sNotes" placeholder="Optional">${esc(s.notes||"")}</textarea><div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveStudent('${id}')">Save</button></div>`);
+ openModal(`<h2>${id?"Edit":"Add"} Student</h2><label>Name</label><input id="sName" value="${esc(s.name)}" placeholder="Full name" oninput="validateStudentName('${id}',true)"><div id="sNameError" class="field-error" style="display:none"></div><label>Program</label><select id="sProgram" onchange="renderStudentLabelDropdown(this.value,[])"></select><label>Labels</label><div class="small muted">Optional. Select one or more labels from the selected program.</div><div id="studentLabelArea" style="margin-top:7px"></div><label>Status</label><select id="sActive"><option value="true" ${s.active?"selected":""}>Active</option><option value="false" ${!s.active?"selected":""}>Inactive</option></select><div class="small muted" style="margin-top:4px">Inactive students keep their history, but no longer appear in new attendance or class lists. Set them back to Active when they return.</div><label>Notes</label><textarea id="sNotes" placeholder="Optional">${esc(s.notes||"")}</textarea><div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveStudent('${id}')">Save</button></div>`);
  populateProgramSelect("sProgram",s.programId,false);renderStudentLabelDropdown(s.programId,s.labelIds||[]);
 }
-function saveStudent(id){let name=$("sName").value.trim();if(!name){alert("Enter a student name.");return}
- name=name.replace(/\s+/g," ");
+function validateStudentName(id,silentEmpty){
+ const inp=$("sName"),err=$("sNameError");if(!inp||!err)return true;
  const norm=x=>String(x||"").trim().replace(/\s+/g," ").toLowerCase();
- if(db.students.some(x=>x.id!==id&&norm(x.name)===norm(name))){alert(`A student named "${name}" already exists.\n\nEvery student needs a different name (capital letters don't count as different). Add a surname or initial, for example "${name} K".`);return}
- let programId=$("sProgram").value;let validLabels=new Set(labelsForProgram(programId).map(l=>l.id));let labelIds=[...document.querySelectorAll(".studentLabel:checked")].map(x=>x.value).filter(x=>validLabels.has(x));let obj={name,active:$("sActive").value==="true",notes:$("sNotes").value,programId,labelIds};if(id){let st=db.students.find(x=>x.id===id);Object.assign(st,obj)}else db.students.push({id:uid(),...obj});save();closeModal();populateStudentFilters();renderStudents();renderClasses();toast("Student saved")}
+ const name=inp.value.trim().replace(/\s+/g," ");
+ let msg="";
+ if(!name){if(!silentEmpty)msg="Enter a student name."}
+ else if(db.students.some(x=>x.id!==id&&norm(x.name)===norm(name)))msg=`A student named "${name}" already exists. Add a surname or initial, for example "${name} K".`;
+ inp.classList.toggle("input-error",!!msg);
+ err.textContent=msg;err.style.display=msg?"block":"none";
+ return !msg;
+}
+function saveStudent(id){
+ if(!validateStudentName(id,false)){$("sName").focus();return}
+ let name=$("sName").value.trim().replace(/\s+/g," ");
+ let programId=$("sProgram").value;let validLabels=new Set(labelsForProgram(programId).map(l=>l.id));let labelIds=[...document.querySelectorAll(".studentLabel:checked")].map(x=>x.value).filter(x=>validLabels.has(x));
+ const nowActive=$("sActive").value==="true";
+ let obj={name,active:nowActive,notes:$("sNotes").value,programId,labelIds};
+ let st=id?db.students.find(x=>x.id===id):null,wasActive=st?st.active!==false:true,msg="Student saved";
+ if(st){Object.assign(st,obj)}else{st={id:uid(),...obj};db.students.push(st)}
+ if(wasActive&&!nowActive){
+   st.gaps=Array.isArray(st.gaps)?st.gaps:[];
+   if(!st.gaps.some(g=>!g.to))st.gaps.push({id:uid(),from:today(),to:""});
+   removeStudentFromUpcomingLessons(st.id,today());
+   msg="Student set to inactive";
+ }else if(!wasActive&&nowActive){
+   (st.gaps||[]).forEach(g=>{if(!g.to)g.to=today()});
+   msg="Student is active again";
+ }
+ save();closeModal();populateStudentFilters();renderStudents();renderClasses();renderAttendance();toast(msg);
+}
 function deleteStudent(id){
  let s=db.students.find(x=>x.id===id);if(!s)return;
  openModal(`<h2>Delete Student?</h2><div class="muted">Are you sure you want to delete <b>${esc(s.name)}</b>?</div><div class="small muted" style="margin-top:10px">The student will be removed from the Students list, from class lists, and from lessons whose attendance has not been marked yet. Attendance that was already marked stays in the history.</div><div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Keep Student</button><button class="btn danger" onclick="confirmDeleteStudent('${id}')">Yes, Delete Student</button></div>`);
@@ -895,13 +983,17 @@ function confirmDeleteStudent(id){
 }
 function renderStudents(){
  let q=($("studentSearch")?.value||"").toLowerCase().trim(),programId=$("studentProgramFilter")?.value||"",labelId=$("studentLabelFilter")?.value||"";
- let arr=db.students.filter(s=>{let labels=s.labelIds||[];return (!q||s.name.toLowerCase().includes(q))&&(!programId||s.programId===programId)&&(!labelId||labels.includes(labelId))});
+ const showInactive=!!$("studentShowInactive")?.checked,inactiveN=db.students.filter(s=>s.active===false).length;
+ const pool=db.students.filter(s=>showInactive||s.active!==false);
+ let arr=pool.filter(s=>{let labels=s.labelIds||[];return (!q||s.name.toLowerCase().includes(q))&&(!programId||s.programId===programId)&&(!labelId||labels.includes(labelId))});
  arr.sort((a,b)=>a.name.localeCompare(b.name,undefined,{sensitivity:"base"}));
- {const total=db.students.length,word=total===1?"student":"students",filtered=!!(q||programId||labelId);
-  $("studentCount").textContent=filtered?`Showing ${arr.length} of ${total} ${word}`:`Showing all ${total} ${word}`;}
- $("studentsArea").innerHTML=arr.length?arr.map(s=>{let p=programById(s.programId),labels=studentLabels(s),st=attendanceStats(s.id);return `<div class="list-item clickable" onclick="studentProfile('${s.id}')"><div class="row"><div><b>${esc(s.name)}</b><div class="small muted">${p?`<span class="tag-chip" style="${tagStyle("program",p.colorIndex)}">${esc(p.name)}</span>`:'<span class="muted">No program</span>'} · ${s.active?"Active":"Inactive"} · ${st.attended}/${st.total} attended</div>${labels.length?`<div class="tag-list" style="margin-top:5px;display:flex;gap:5px;flex-wrap:wrap">${labels.map(l=>`<span class="tag-chip" style="${tagStyle("label",l.colorIndex)}">${esc(l.name)}</span>`).join("")}</div>`:""}${s.notes?`<div class="small muted" style="margin-top:7px"><b>Notes:</b> ${esc(s.notes)}</div>`:""}</div><span class="badge ${s.active?"present":"inactive"}">${s.active?"Active":"Inactive"}</span></div></div>`}).join(""):`<div class="card empty">No students match these filters.</div>`
+ {const total=pool.length,word=(inactiveN&&!showInactive)?(total===1?"active student":"active students"):(total===1?"student":"students"),filtered=!!(q||programId||labelId);
+  let t=filtered?`Showing ${arr.length} of ${total} ${word}`:`Showing all ${total} ${word}`;
+  if(inactiveN)t+=showInactive?` · ${inactiveN} inactive`:` · ${inactiveN} inactive hidden`;
+  $("studentCount").textContent=t;
+  const lab=$("studentInactiveLabel");if(lab)lab.textContent=inactiveN?`Show inactive students (${inactiveN})`:"Show inactive students";}
+ $("studentsArea").innerHTML=arr.length?arr.map(s=>{let p=programById(s.programId),labels=studentLabels(s),st=attendanceStats(s.id),gap=(s.gaps||[]).find(g=>!g.to);return `<div class="list-item clickable" style="${s.active===false?"opacity:.78":""}" onclick="studentProfile('${s.id}')"><div class="row"><div><b>${esc(s.name)}</b><div class="small muted">${p?`<span class="tag-chip" style="${tagStyle("program",p.colorIndex)}">${esc(p.name)}</span>`:'<span class="muted">No program</span>'} · ${s.active?"Active":"Inactive"+(gap?` since ${esc(fmtClassDate(gap.from))}`:"")} · ${st.attended}/${st.total} attended</div>${labels.length?`<div class="tag-list" style="margin-top:5px;display:flex;gap:5px;flex-wrap:wrap">${labels.map(l=>`<span class="tag-chip" style="${tagStyle("label",l.colorIndex)}">${esc(l.name)}</span>`).join("")}</div>`:""}${s.notes?`<div class="small muted" style="margin-top:7px"><b>Notes:</b> ${esc(s.notes)}</div>`:""}</div><span class="badge ${s.active?"present":"inactive"}">${s.active?"Active":"Inactive"}</span></div></div>`}).join(""):`<div class="card empty">${showInactive||!inactiveN||q||programId||labelId?"No students match these filters.":"No active students. Turn on \"Show inactive students\" to see everyone."}</div>`
 }
-
 function renderProgramsLabels(){
  $("programsArea").innerHTML=db.programs.length?db.programs.map(p=>{let labels=p.labels||[];return `<div class="taxonomy-row" style="display:block;padding:14px"><div class="row"><div><span class="tag-chip" style="${tagStyle("program",p.colorIndex)};font-size:16px;padding:6px 10px">${esc(p.name)}</span></div><div class="actions"><button class="btn" onclick="addLabel('${p.id}')">+ Label</button><button class="btn danger" onclick="deleteProgram('${p.id}')">Delete</button></div></div><div class="taxonomy-list" style="margin-top:10px">${labels.length?labels.map(l=>`<div class="taxonomy-row"><span class="tag-chip" style="${tagStyle("label",l.colorIndex)}">${esc(l.name)}</span><button class="btn danger" onclick="deleteLabel('${l.id}')">Delete</button></div>`).join(""):'<div class="muted small">No labels yet. Add a label for this program.</div>'}</div></div>`}).join(""):`<div class="card empty">No programs yet. Add a program to get started.</div>`;
 }
@@ -953,7 +1045,7 @@ function openClass(id=""){
  let ctype=classType(c);
  let activeStudents=db.students.filter(s=>s.active);
  let opts=activeStudents.map(s=>`<label class="class-student-row" data-student-name="${esc(s.name.toLowerCase())}" data-program-id="${esc(s.programId||"")}" data-label-ids="${esc((s.labelIds||[]).join(","))}"><input class="classStudent" type="checkbox" value="${s.id}" ${c.studentIds.includes(s.id)?"checked":""} onchange="updateClassStudentCount()"> <span>${esc(s.name)}</span></label>`).join("")||'<div class="muted small">Add active students first.</div>';
- openModal(`<h2>${id?"Edit":"Add"} Class</h2><label>Class name</label><input id="cName" value="${esc(c.name)}" placeholder="e.g. Private Lesson"><label>Class type</label><select id="cType" onchange="toggleClassType()"><option value="recurring" ${ctype!=="once"?"selected":""}>Recurring (repeats every week)</option><option value="once" ${ctype==="once"?"selected":""}>Once-off (a single date)</option></select><div class="grid two"><div><label>Program</label><select id="cProgram" onchange="refreshClassStudentFilters()"></select></div><div><label>Time</label><input id="cTime" type="time" value="${esc(c.time)}"></div></div><div id="cDaysWrap" style="display:${ctype==='once'?'none':'block'}"><label>Days</label><div id="cDays" class="day-checks">${["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"].map(x=>`<label class="day-check"><input type="checkbox" class="classDay" value="${x}" ${days.includes(x)?"checked":""}> <span>${x}</span></label>`).join("")}</div><label>Starts on</label><input id="cStart" type="date" value="${esc(id?(c.startDate||""):today())}"><div class="small muted" style="margin-top:4px">The class only appears in attendance from this date onwards. Leave empty to include earlier dates too.</div></div><div id="cDateWrap" style="display:${ctype==='once'?'block':'none'}"><label>Date</label><input id="cDate" type="date" value="${esc(c.date||"")}"></div><label>Default student list</label><select id="cListMode" onchange="toggleClassLabelMode()"><option value="manual" ${c.listMode!=="label"?"selected":""}>Manual Student List</option><option value="label" ${c.listMode==="label"?"selected":""}>Label Default List</option></select><div id="classLabelMode" style="display:${c.listMode==="label"?"block":"none"}"><label>Default label</label><select id="cDefaultLabel" onchange="applyDefaultLabel()"></select><div class="small muted" style="margin-top:5px">Students with this label are automatically included, and you can still edit the list below.</div></div><label>Find students</label><div class="class-filter-row"><input id="classStudentSearch" placeholder="Search students..." oninput="filterClassStudents()"><select id="classStudentProgramFilter" onchange="filterClassStudents()"></select><select id="classStudentLabelFilter" onchange="filterClassStudents()"></select></div><div id="classStudentList" class="class-student-list">${opts}</div><div id="classStudentCount" class="small muted" style="margin-top:7px">${c.studentIds.length} selected</div><label>Notes</label><textarea id="cNotes">${esc(c.notes||"")}</textarea><div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveClass('${id}')">Save Class</button></div>`);
+ openModal(`<h2>${id?"Edit":"Add"} Class</h2><label>Class name</label><input id="cName" value="${esc(c.name)}" placeholder="e.g. Private Lesson"><label>Class type</label><select id="cType" onchange="toggleClassType()"><option value="recurring" ${ctype!=="once"?"selected":""}>Recurring (repeats every week)</option><option value="once" ${ctype==="once"?"selected":""}>Once-off (a single date)</option></select><div class="grid two"><div><label>Program</label><select id="cProgram" onchange="refreshClassStudentFilters()"></select></div><div><label>Time</label><input id="cTime" type="time" value="${esc(c.time)}"></div></div><div id="cDaysWrap" style="display:${ctype==='once'?'none':'block'}"><label>Days</label><div id="cDays" class="day-checks">${["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"].map(x=>`<label class="day-check"><input type="checkbox" class="classDay" value="${x}" ${days.includes(x)?"checked":""}> <span>${x}</span></label>`).join("")}</div><label>Starts on</label><input id="cStart" type="date" value="${esc(id?(c.startDate||""):today())}"><div class="small muted" style="margin-top:4px">The class only appears in attendance from this date onwards. Leave empty to include earlier dates too.</div></div><div id="cDateWrap" style="display:${ctype==='once'?'block':'none'}"><label>Date</label><input id="cDate" type="date" value="${esc(c.date||"")}"></div><label>Default student list</label><select id="cListMode" onchange="toggleClassLabelMode()"><option value="manual" ${c.listMode!=="label"?"selected":""}>Manual Student List</option><option value="label" ${c.listMode==="label"?"selected":""}>Label Default List</option></select><div id="classLabelMode" style="display:${c.listMode==="label"?"block":"none"}"><label>Default label</label><select id="cDefaultLabel" onchange="applyDefaultLabel()"></select><div class="small muted" style="margin-top:5px">Students with this label are automatically included, and you can still edit the list below.</div></div><label>Find students</label><div class="class-filter-row"><input id="classStudentSearch" placeholder="Search students..." oninput="filterClassStudents()"><select id="classStudentProgramFilter" onchange="filterClassStudents()"></select><select id="classStudentLabelFilter" onchange="filterClassStudents()"></select></div><div id="classStudentList" class="class-student-list">${opts}</div><div id="classStudentCount" class="small muted" style="margin-top:7px">${activeClassStudentIds(c).length} selected</div><label>Notes</label><textarea id="cNotes">${esc(c.notes||"")}</textarea><div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveClass('${id}')">Save Class</button></div>`);
  populateProgramSelect("cProgram",c.programId,false);populateProgramSelect("classStudentProgramFilter",c.programId,true);populateLabelSelect("classStudentLabelFilter","",true,c.programId);populateLabelSelect("cDefaultLabel",c.defaultLabelId,false,c.programId);refreshClassStudentFilters();if(c.listMode==="label")applyDefaultLabel();else updateClassStudentCount();
 }
 function toggleClassType(){let once=$("cType").value==="once";$("cDaysWrap").style.display=once?"none":"block";$("cDateWrap").style.display=once?"block":"none"}
@@ -962,7 +1054,8 @@ function applyDefaultLabel(){if(!$("cProgram")?.value)return;let id=$("cDefaultL
 function toggleClassLabelMode(){let mode=$("cListMode").value,box=$("classLabelMode");box.style.display=mode==="label"?"block":"none";if(mode==="label")applyDefaultLabel()}
 function refreshClassStudentFilters(){let p=$("cProgram")?.value||"";if($("classStudentProgramFilter"))$("classStudentProgramFilter").value=p;let l=$("classStudentLabelFilter")?.value||"",d=$("cDefaultLabel")?.value||"";populateLabelSelect("classStudentLabelFilter",l,true,p);populateLabelSelect("cDefaultLabel",d,false,p);if($("classStudentLabelFilter")&&!labelsForProgram(p).some(x=>x.id===$("classStudentLabelFilter").value))$("classStudentLabelFilter").value="";if($("cDefaultLabel")&&!labelsForProgram(p).some(x=>x.id===$("cDefaultLabel").value))$("cDefaultLabel").value="";filterClassStudents()}
 function filterClassStudents(){let q=($("classStudentSearch")?.value||"").toLowerCase().trim(),p=$("classStudentProgramFilter")?.value||"",l=$("classStudentLabelFilter")?.value||"";document.querySelectorAll('#classStudentList .class-student-row').forEach(row=>{let labels=(row.dataset.labelIds||'').split(',').filter(Boolean);let name=(row.dataset.studentName||'');row.style.display=(!q||name.includes(q))&&(!p||row.dataset.programId===p)&&(!l||labels.includes(l))?'flex':'none'});updateClassStudentCount()}
-function saveClass(id){let name=$("cName").value.trim();if(!name){alert("Enter a class name.");return}let type=$("cType").value==="once"?"once":"recurring",date="",days=[];if(type==="once"){date=$("cDate").value;if(!date){alert("Choose the date for this once-off class.");return}}else{days=[...document.querySelectorAll(".classDay:checked")].map(x=>x.value);if(!days.length){alert("Select at least one day.");return}}let studentIds=[...document.querySelectorAll(".classStudent:checked")].map(x=>x.value);let obj={name,type,date,startDate:type==="recurring"?($("cStart").value||""):"",days,day:days[0]||"",time:$("cTime").value,studentIds,notes:$("cNotes").value,programId:$("cProgram").value,listMode:$("cListMode").value,defaultLabelId:$("cDefaultLabel").value};let cls;if(id){cls=db.classes.find(x=>x.id===id);Object.assign(cls,obj)}else{cls={id:uid(),...obj};db.classes.push(cls)}pruneEmptySessions(cls);save();closeModal();populateSelectors();renderClasses();renderAttendance();toast("Class saved")}
+function saveClass(id){let name=$("cName").value.trim();if(!name){alert("Enter a class name.");return}let type=$("cType").value==="once"?"once":"recurring",date="",days=[];if(type==="once"){date=$("cDate").value;if(!date){alert("Choose the date for this once-off class.");return}}else{days=[...document.querySelectorAll(".classDay:checked")].map(x=>x.value);if(!days.length){alert("Select at least one day.");return}}let studentIds=[...document.querySelectorAll(".classStudent:checked")].map(x=>x.value);if(id){const old=db.classes.find(x=>x.id===id);((old&&old.studentIds)||[]).forEach(sid=>{const st=studentById(sid);if(st&&st.active===false&&!studentIds.includes(sid))studentIds.push(sid)})} // inactive students stay on the class for when they return
+ let obj={name,type,date,startDate:type==="recurring"?($("cStart").value||""):"",days,day:days[0]||"",time:$("cTime").value,studentIds,notes:$("cNotes").value,programId:$("cProgram").value,listMode:$("cListMode").value,defaultLabelId:$("cDefaultLabel").value};let cls;if(id){cls=db.classes.find(x=>x.id===id);Object.assign(cls,obj)}else{cls={id:uid(),...obj};db.classes.push(cls)}pruneEmptySessions(cls);save();closeModal();populateSelectors();renderClasses();renderAttendance();toast("Class saved")}
 function pauseClass(id){
  const c=db.classes.find(x=>x.id===id);if(!c||classType(c)==="once")return;
  const p=currentPause(c),t=today(),active=!!p&&p.from<=t;
@@ -1010,12 +1103,12 @@ function renderClasses(){
  const q=($("classSearch")?.value||"").toLowerCase().trim(),pf=$("classProgramFilter")?.value||"",lf=$("classLabelFilter")?.value||"";
  const sorted=db.classes.slice().sort((a,b)=>(isPausedNow(a)?1:0)-(isPausedNow(b)?1:0)||String(a.name||"").localeCompare(String(b.name||""),undefined,{sensitivity:"base",numeric:true}));
  const list=sorted.filter(c=>(!q||classSearchText(c).includes(q))&&(!pf||c.programId===pf)&&(!lf||c.defaultLabelId===lf));
- $("classesArea").innerHTML=list.length?list.map(c=>{let p=programById(c.programId),label=labelById(c.defaultLabelId);return `<div class="card" style="${isPausedNow(c)?"opacity:.82":""}"><div class="row"><div style="cursor:pointer;flex:1" onclick="classProfile('${c.id}')" title="Open class profile"><h2>${esc(c.name)}</h2><div class="muted">${esc(classScheduleText(c))} · ${c.studentIds.length} default students</div><div class="small" style="margin-top:6px">${classTypeBadge(c)} ${pauseBadge(c)} ${p?`<span class="badge pending">${esc(p.name)}</span>`:""} ${c.listMode==="label"&&label?`<span class="badge present">Label: ${esc(label.name)}</span>`:""}</div></div><div class="actions">${classCardButtons(c)}</div></div><div class="small muted" style="margin-top:8px">${c.studentIds.map(id=>esc(db.students.find(s=>s.id===id)?.name||"Unknown")).join(", ")||"No students assigned yet."}</div></div>`}).join(""):(db.classes.length?`<div class="card empty">${q?`No classes match "${esc(q)}".`:"No classes match these filters."}</div>`:`<div class="card empty">No classes yet. Create a class and choose its default students.</div>`)
+ $("classesArea").innerHTML=list.length?list.map(c=>{let p=programById(c.programId),label=labelById(c.defaultLabelId);return `<div class="card" style="${isPausedNow(c)?"opacity:.82":""}"><div class="row"><div style="cursor:pointer;flex:1" onclick="classProfile('${c.id}')" title="Open class profile"><h2>${esc(c.name)}</h2><div class="muted">${esc(classScheduleText(c))} · ${activeClassStudentIds(c).length} default students</div><div class="small" style="margin-top:6px">${classTypeBadge(c)} ${pauseBadge(c)} ${p?`<span class="badge pending">${esc(p.name)}</span>`:""} ${c.listMode==="label"&&label?`<span class="badge present">Label: ${esc(label.name)}</span>`:""}</div></div><div class="actions">${classCardButtons(c)}</div></div><div class="small muted" style="margin-top:8px">${activeClassStudentIds(c).map(id=>esc(studentById(id).name)).join(", ")||"No students assigned yet."}</div></div>`}).join(""):(db.classes.length?`<div class="card empty">${q?`No classes match "${esc(q)}".`:"No classes match these filters."}</div>`:`<div class="card empty">No classes yet. Create a class and choose its default students.</div>`)
 }
 function classProfile(id){
  let c=db.classes.find(x=>x.id===id);if(!c)return;
  let p=programById(c.programId),label=labelById(c.defaultLabelId),once=classType(c)==="once";
- let names=(c.studentIds||[]).map(sid=>db.students.find(s=>s.id===sid)).filter(Boolean).map(s=>s.name).sort((a,b)=>a.localeCompare(b));
+ let names=(c.studentIds||[]).map(sid=>db.students.find(s=>s.id===sid)).filter(s=>s&&s.active!==false).map(s=>s.name).sort((a,b)=>a.localeCompare(b));
  let sessions=recordedSessionsForClass(id,""),last=sessions.length?sessions[sessions.length-1].date:"";
  let when=once?(c.date?fmtClassDate(c.date)+(c.date<today()?" (past)":""):"No date set"):(classDaysList(c).length?"Every "+classDaysList(c).join(", "):"No days set");
  openModal(`<div class="row"><div><h2>${esc(c.name)}</h2><div style="margin-top:6px">${classTypeBadge(c)} ${p?`<span class="badge pending">${esc(p.name)}</span>`:""} ${c.listMode==="label"&&label?`<span class="badge present">Label: ${esc(label.name)}</span>`:""}</div></div><button class="btn" onclick="closeModal();openClass('${id}')">Edit</button></div>
@@ -1040,10 +1133,14 @@ function openClassAttendance(id){let c=db.classes.find(x=>x.id===id);showView("a
 function recordedSessionsForClass(classId,month=""){
  let c=db.classes.find(x=>x.id===classId);
  if(!c)return [];
- return db.attendance.filter(r=>{
+ const list=db.attendance.filter(r=>{
    let sameClass=r.classId===classId||(r.className&&r.className===c.name);
    return sameClass&&r.date<=today()&&!r.cancelled&&(!month||r.date.slice(0,7)===month);
- }).sort((a,b)=>a.date.localeCompare(b.date));
+ });
+ // one lesson per day: if older duplicates exist, show the one that has attendance marked
+ const byDate=new Map();
+ list.forEach(r=>{const cur=byDate.get(r.date);if(!cur||sessionScore(r)>sessionScore(cur))byDate.set(r.date,r)});
+ return [...byDate.values()].sort((a,b)=>a.date.localeCompare(b.date));
 }
 function populateHistorySelectors(){
  let c=$("histClass"),old=c.value;
@@ -1266,6 +1363,55 @@ async function restoreFromBackup(x){
  }
 }
 
+let deferredInstall=null,installing=false;
+function isStandalone(){return !!((window.matchMedia&&window.matchMedia("(display-mode: standalone)").matches)||navigator.standalone===true)}
+function isIOSDevice(){const ua=navigator.userAgent||"";return /iphone|ipad|ipod/i.test(ua)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1)}
+function updateInstallUI(){
+ const show=!isStandalone()&&(!!deferredInstall||installing||isIOSDevice());
+ [["installBtn","⬇ Install app"],["installBtnAuth","⬇ Install the app on this device"]].forEach(([id,label])=>{
+   const b=$(id);if(!b)return;
+   b.style.display=show?"":"none";b.disabled=installing;
+   b.innerHTML=installing?'<span class="spinner"></span> Installing…':label;
+ });
+}
+function instStepDone(id,text){const e=$(id);if(e)e.innerHTML=`<span class="inst-ok">✓</span> ${text}`}
+function showInstallProgress(){
+ openModal(`<h2 id="instTitle">Installing Alkawn Hub…</h2>
+ <div class="inst-step" id="instStep1"><span class="spinner"></span> Installing the app on this device</div>
+ <div class="inst-step" id="instStep2"><span class="spinner"></span> Saving a copy for offline use</div>
+ <div class="indet" id="instBar"><div></div></div>
+ <div class="small muted" id="instNote">This usually takes a few seconds. You can keep using the app while it installs.</div>
+ <div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Hide</button></div>`);
+ if(navigator.serviceWorker&&navigator.serviceWorker.ready)navigator.serviceWorker.ready.then(()=>instStepDone("instStep2","Offline copy saved")).catch(()=>{});
+ clearTimeout(window.__instTimer);
+ window.__instTimer=setTimeout(()=>{const n=$("instNote");if(n&&installing)n.textContent="Still working… if it does not finish, check your home screen or app list, or try again from the browser menu."},45000);
+}
+function finishInstall(){
+ installing=false;deferredInstall=null;clearTimeout(window.__instTimer);
+ const t=$("instTitle");if(t){t.textContent="Alkawn Hub is installed ✓";instStepDone("instStep1","App installed");instStepDone("instStep2","Offline copy saved");const b=$("instBar");if(b)b.style.display="none";const n=$("instNote");if(n)n.textContent="Find Alkawn Hub on your home screen or in your app list.";}
+ updateInstallUI();toast("Alkawn Hub installed");
+}
+async function installApp(){
+ if(installing)return;
+ if(deferredInstall){
+   const ev=deferredInstall;
+   try{
+     ev.prompt();
+     const choice=await ev.userChoice;
+     deferredInstall=null;
+     if(choice&&choice.outcome==="accepted"){installing=true;updateInstallUI();showInstallProgress();return}
+     updateInstallUI();
+     toast("Install cancelled. You can install later from the browser menu.");
+   }catch(e){console.error(e);deferredInstall=null;updateInstallUI()}
+   return;
+ }
+ if(isIOSDevice()){
+   openModal(`<h2>Install on iPhone or iPad</h2><ol style="padding-left:20px;line-height:1.7"><li>Tap the <b>Share</b> button (the square with an arrow) in Safari.</li><li>Scroll down and tap <b>Add to Home Screen</b>.</li><li>Tap <b>Add</b>. Alkawn Hub now appears on your home screen.</li></ol><div class="small muted">On iPhone this is instant — nothing is downloaded.</div><div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn primary" onclick="closeModal()">Got it</button></div>`);
+ }
+}
+window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredInstall=e;updateInstallUI()});
+window.addEventListener("appinstalled",finishInstall);
+updateInstallUI();
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
 $("attDate").value=today();
 // Keep the existing local data available as a safety net until cloud data is loaded.
