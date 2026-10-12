@@ -987,7 +987,7 @@ function saveStudent(id){
  let name=$("sName").value.trim().replace(/\s+/g," ");
  let programId=$("sProgram").value;let validLabels=new Set(labelsForProgram(programId).map(l=>l.id));let labelIds=[...document.querySelectorAll(".studentLabel:checked")].map(x=>x.value).filter(x=>validLabels.has(x));
  const nowActive=$("sActive").value==="true";
- let obj={name,active:nowActive,notes:$("sNotes").value,programId,labelIds,...payFieldsRead()};
+ let obj={name,active:nowActive,notes:$("sNotes").value,programId,labelIds,...payFieldsRead(name)};
  let st=id?db.students.find(x=>x.id===id):null,wasActive=st?st.active!==false:true,msg="Student saved";
  if(st){Object.assign(st,obj)}else{st={id:uid(),...obj};db.students.push(st)}
  if(wasActive&&!nowActive){
@@ -1471,11 +1471,15 @@ function nextRef(){const n=db.recipients.reduce((m,r)=>Math.max(m,parseInt(Strin
 function addRecipient(name,phone){const r={id:uid(),name:name.trim(),phone:(phone||"").trim(),ref:nextRef(),notes:""};db.recipients.push(r);return r}
 function payFields(s){
  const sel=db.recipients.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(r=>`<option value="${r.id}" ${s.recipientId===r.id?"selected":""}>${esc(r.name)} (${esc(r.ref)})</option>`).join("");
- return `<h3 style="margin:16px 0 0">Payment</h3><label>Invoice Recipient (who pays)</label><select id="sRecipient"><option value="">— none yet —</option>${sel}</select><input id="sNewRecipient" placeholder="Or add a new recipient (name)" style="margin-top:6px"><input id="sNewRecipientPhone" placeholder="Their WhatsApp number (optional)" style="margin-top:6px"><div class="grid three"><div><label>Payment timing</label><select id="sTiming">${Object.entries(TIMING).map(([k,v])=>`<option value="${k}" ${(s.timing||"advance")===k?"selected":""}>${v}</option>`).join("")}</select></div><div><label>Pricing method</label><select id="sPricing">${Object.entries(PRICING).map(([k,v])=>`<option value="${k}" ${(s.pricing||"monthly")===k?"selected":""}>${v}</option>`).join("")}</select></div><div><label>Amount (R)</label><input id="sFee" type="number" min="0" step="any" value="${s.fee??""}" placeholder="Fee"></div></div><div class="small muted" style="margin-top:4px">Amount = the monthly fee, or the price per class. Custom pricing: enter the agreed monthly amount and explain it below.</div><input id="sFeeNote" value="${esc(s.feeNote||"")}" placeholder="Reason for any special arrangement (optional)" style="margin-top:6px">`;
+ return `<h3 style="margin:16px 0 0">Payment</h3><label style="display:flex;gap:8px;align-items:center;margin-top:10px"><input type="checkbox" id="sSelfPay" onchange="selfPayToggle()" style="width:auto;margin:0" ${selfPays(s)?"checked":""}> This student pays for themself</label><div class="small muted" style="margin-top:2px">Uses the student's own name as the Invoice Recipient, so you don't type it again.</div><label>Invoice Recipient (who pays)</label><select id="sRecipient" ${selfPays(s)?"disabled":""}><option value="">— none yet —</option>${sel}</select><input id="sNewRecipient" placeholder="Or add a new recipient (name)" style="margin-top:6px" ${selfPays(s)?"disabled":""}><input id="sNewRecipientPhone" placeholder="Their WhatsApp number (optional)" style="margin-top:6px"><div class="grid three"><div><label>Payment timing</label><select id="sTiming">${Object.entries(TIMING).map(([k,v])=>`<option value="${k}" ${(s.timing||"advance")===k?"selected":""}>${v}</option>`).join("")}</select></div><div><label>Pricing method</label><select id="sPricing">${Object.entries(PRICING).map(([k,v])=>`<option value="${k}" ${(s.pricing||"monthly")===k?"selected":""}>${v}</option>`).join("")}</select></div><div><label>Amount (R)</label><input id="sFee" type="number" min="0" step="any" value="${s.fee??""}" placeholder="Fee"></div></div><div class="small muted" style="margin-top:4px">Amount = the monthly fee, or the price per class. Custom pricing: enter the agreed monthly amount and explain it below.</div><input id="sFeeNote" value="${esc(s.feeNote||"")}" placeholder="Reason for any special arrangement (optional)" style="margin-top:6px">`;
 }
-function payFieldsRead(){
+const normName=x=>String(x||"").trim().replace(/\s+/g," ").toLowerCase();
+function selfPays(s){const r=s&&s.recipientId&&recById(s.recipientId);return !!(r&&s.name&&normName(r.name)===normName(s.name))}
+function selfPayToggle(){const on=$("sSelfPay").checked;$("sRecipient").disabled=on;$("sNewRecipient").disabled=on}
+function payFieldsRead(studentName){
  let rid=$("sRecipient").value,nn=$("sNewRecipient").value.trim();
- if(nn){const ex=db.recipients.find(r=>r.name.toLowerCase()===nn.toLowerCase());rid=(ex||addRecipient(nn,$("sNewRecipientPhone").value)).id}
+ if($("sSelfPay").checked){const ex=db.recipients.find(r=>normName(r.name)===normName(studentName));const r=ex||addRecipient(studentName,$("sNewRecipientPhone").value);if(ex&&!ex.phone&&$("sNewRecipientPhone").value.trim())ex.phone=$("sNewRecipientPhone").value.trim();rid=r.id}
+ else if(nn){const ex=db.recipients.find(r=>r.name.toLowerCase()===nn.toLowerCase());rid=(ex||addRecipient(nn,$("sNewRecipientPhone").value)).id}
  const fee=parseFloat($("sFee").value);
  return {recipientId:rid,timing:$("sTiming").value,pricing:$("sPricing").value,fee:isNaN(fee)?"":fee,feeNote:$("sFeeNote").value.trim()};
 }
