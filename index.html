@@ -90,7 +90,7 @@ dialog{border:0;border-radius:13px;padding:0;width:min(560px,calc(100% - 24px));
 </div>
 <div id="app" class="app hidden">
 <header>
-  <div class="brand">Alkawn Hub <small>Attendance · v2026-10-13</small></div>
+  <div class="brand">Alkawn Hub <small>Attendance &amp; Payments · v2026-10-14</small></div>
   <div class="header-actions">
     <span id="syncBadge" class="sync-badge"></span>
     <span id="statusText" class="status-text" aria-live="polite"></span>
@@ -108,6 +108,7 @@ dialog{border:0;border-radius:13px;padding:0;width:min(560px,calc(100% - 24px));
     <button data-view="programs">Programs & Labels</button>
     <button data-view="classes">Classes</button>
     <button data-view="history">History</button>
+    <button data-view="payments">Payments</button>
   </nav>
 
   <section id="attendance" class="view active">
@@ -157,6 +158,11 @@ dialog{border:0;border-radius:13px;padding:0;width:min(560px,calc(100% - 24px));
       <div><label>Label</label><select id="classLabelFilter" onchange="renderClasses()"></select></div>
     </div></div>
     <div id="classesArea" class="list"></div>
+  </section>
+
+  <section id="payments" class="view">
+    <div class="row" style="margin-bottom:14px"><div><h1>Payments</h1><div class="muted">Who owes what for the month. Tap a family to see the statement.</div></div><input id="payMonth" type="month" class="month-input" onchange="renderPayments()"></div>
+    <div id="payArea"></div>
   </section>
 
   <section id="history" class="view">
@@ -561,7 +567,7 @@ window.addEventListener("online",()=>{cloudRetryDelay=5000;clearTimeout(cloudRet
 window.addEventListener("offline",()=>{if(cloudReady)goOffline()});
 function migrateData(){
  db.students=Array.isArray(db.students)?db.students:[];db.classes=Array.isArray(db.classes)?db.classes:[];db.attendance=Array.isArray(db.attendance)?db.attendance:[];
- db.programs=Array.isArray(db.programs)?db.programs:[];
+ db.programs=Array.isArray(db.programs)?db.programs:[];db.recipients=Array.isArray(db.recipients)?db.recipients:[];db.payments=Array.isArray(db.payments)?db.payments:[];
  db.students.forEach(s=>{if(!Array.isArray(s.labelIds))s.labelIds=[];if(s.programId===undefined)s.programId="";delete s.subcategory});
  db.classes.forEach(c=>{if(!Array.isArray(c.days))c.days=c.day?[c.day]:[];if(c.day===undefined)c.day=c.days[0]||"";if(c.programId===undefined)c.programId="";if(c.listMode===undefined)c.listMode="manual";if(c.defaultLabelId===undefined)c.defaultLabelId=""});
  db.programs.forEach((p,pi)=>{if(!Array.isArray(p.labels))p.labels=[];if(p.colorIndex===undefined)p.colorIndex=pi%10;p.labels.forEach((l,li)=>{if(l.colorIndex===undefined)l.colorIndex=li%10})});
@@ -620,7 +626,7 @@ $("modal").addEventListener("click",e=>{if(e.target===$("modal"))closeModal()})
 document.querySelectorAll(".nav button").forEach(b=>b.onclick=()=>showView(b.dataset.view));
 function showView(v){document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));$(v).classList.add("active");document.querySelectorAll(".nav button").forEach(x=>x.classList.toggle("active",x.dataset.view===v));refresh(v)}
 
-function refresh(v){if(v==="attendance"){populateSelectors();renderAttendance()}if(v==="students"){populateStudentFilters();renderStudents()}if(v==="programs")renderProgramsLabels();if(v==="classes")renderClasses();if(v==="history"){populateHistorySelectors();renderHistory()}}
+function refresh(v){if(v==="attendance"){populateSelectors();renderAttendance()}if(v==="students"){populateStudentFilters();renderStudents()}if(v==="programs")renderProgramsLabels();if(v==="classes")renderClasses();if(v==="history"){populateHistorySelectors();renderHistory()}if(v==="payments"){if(!$("payMonth").value)$("payMonth").value=monthNow();renderPayments()}}
 function weekdayForDate(date){return new Date(date+"T12:00:00").toLocaleDateString(undefined,{weekday:"long"})}
 function classType(c){return c&&c.type==="once"?"once":"recurring"}
 function fmtClassDate(d){return d?new Date(d+"T12:00:00").toLocaleDateString(undefined,{weekday:"short",day:"numeric",month:"short",year:"numeric"}):""}
@@ -953,7 +959,7 @@ function renderStudentLabelDropdown(programId,selectedIds=[]){
 }
 function openStudent(id=""){
  let s=db.students.find(x=>x.id===id)||{name:"",active:true,notes:"",programId:"",labelIds:[]};
- openModal(`<h2>${id?"Edit":"Add"} Student</h2><label>Name</label><input id="sName" value="${esc(s.name)}" placeholder="Full name" oninput="validateStudentName('${id}',true)"><div id="sNameError" class="field-error" style="display:none"></div><label>Program</label><select id="sProgram" onchange="renderStudentLabelDropdown(this.value,[])"></select><label>Labels</label><div class="small muted">Optional. Select one or more labels from the selected program.</div><div id="studentLabelArea" style="margin-top:7px"></div><label>Status</label><select id="sActive"><option value="true" ${s.active?"selected":""}>Active</option><option value="false" ${!s.active?"selected":""}>Inactive</option></select><div class="small muted" style="margin-top:4px">Inactive students keep their history, but no longer appear in new attendance or class lists. Set them back to Active when they return.</div><label>Notes</label><textarea id="sNotes" placeholder="Optional">${esc(s.notes||"")}</textarea><div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveStudent('${id}')">Save</button></div>`);
+ openModal(`<h2>${id?"Edit":"Add"} Student</h2><label>Name</label><input id="sName" value="${esc(s.name)}" placeholder="Full name" oninput="validateStudentName('${id}',true)"><div id="sNameError" class="field-error" style="display:none"></div><label>Program</label><select id="sProgram" onchange="renderStudentLabelDropdown(this.value,[])"></select><label>Labels</label><div class="small muted">Optional. Select one or more labels from the selected program.</div><div id="studentLabelArea" style="margin-top:7px"></div><label>Status</label><select id="sActive"><option value="true" ${s.active?"selected":""}>Active</option><option value="false" ${!s.active?"selected":""}>Inactive</option></select><div class="small muted" style="margin-top:4px">Inactive students keep their history, but no longer appear in new attendance or class lists. Set them back to Active when they return.</div>${payFields(s)}<label>Notes</label><textarea id="sNotes" placeholder="Optional">${esc(s.notes||"")}</textarea><div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveStudent('${id}')">Save</button></div>`);
  populateProgramSelect("sProgram",s.programId,false);renderStudentLabelDropdown(s.programId,s.labelIds||[]);
 }
 function setFieldError(inputId,errId,msg){
@@ -981,7 +987,7 @@ function saveStudent(id){
  let name=$("sName").value.trim().replace(/\s+/g," ");
  let programId=$("sProgram").value;let validLabels=new Set(labelsForProgram(programId).map(l=>l.id));let labelIds=[...document.querySelectorAll(".studentLabel:checked")].map(x=>x.value).filter(x=>validLabels.has(x));
  const nowActive=$("sActive").value==="true";
- let obj={name,active:nowActive,notes:$("sNotes").value,programId,labelIds};
+ let obj={name,active:nowActive,notes:$("sNotes").value,programId,labelIds,...payFieldsRead()};
  let st=id?db.students.find(x=>x.id===id):null,wasActive=st?st.active!==false:true,msg="Student saved";
  if(st){Object.assign(st,obj)}else{st={id:uid(),...obj};db.students.push(st)}
  if(wasActive&&!nowActive){
@@ -1455,6 +1461,83 @@ async function installApp(){
 window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredInstall=e;updateInstallUI()});
 window.addEventListener("appinstalled",finishInstall);
 updateInstallUI();
+// ===== Payments: recipients, statements, payments, unpaid list =====
+const R=n=>"R"+Number(n||0).toLocaleString("en-ZA",{minimumFractionDigits:0,maximumFractionDigits:2});
+const monthNow=()=>today().slice(0,7);
+const TIMING={advance:"Pay in advance",end:"Pay at end of month",perclass:"Pay per class"};
+const PRICING={monthly:"Standard monthly fee",perclass:"Per class",custom:"Custom pricing"};
+function recById(id){return db.recipients.find(r=>r.id===id)}
+function nextRef(){const n=db.recipients.reduce((m,r)=>Math.max(m,parseInt(String(r.ref||"").replace(/\D/g,""))||0),0)+1;return "ALK-"+String(n).padStart(3,"0")}
+function addRecipient(name,phone){const r={id:uid(),name:name.trim(),phone:(phone||"").trim(),ref:nextRef(),notes:""};db.recipients.push(r);return r}
+function payFields(s){
+ const sel=db.recipients.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(r=>`<option value="${r.id}" ${s.recipientId===r.id?"selected":""}>${esc(r.name)} (${esc(r.ref)})</option>`).join("");
+ return `<h3 style="margin:16px 0 0">Payment</h3><label>Invoice Recipient (who pays)</label><select id="sRecipient"><option value="">— none yet —</option>${sel}</select><input id="sNewRecipient" placeholder="Or add a new recipient (name)" style="margin-top:6px"><input id="sNewRecipientPhone" placeholder="Their WhatsApp number (optional)" style="margin-top:6px"><div class="grid three"><div><label>Payment timing</label><select id="sTiming">${Object.entries(TIMING).map(([k,v])=>`<option value="${k}" ${(s.timing||"advance")===k?"selected":""}>${v}</option>`).join("")}</select></div><div><label>Pricing method</label><select id="sPricing">${Object.entries(PRICING).map(([k,v])=>`<option value="${k}" ${(s.pricing||"monthly")===k?"selected":""}>${v}</option>`).join("")}</select></div><div><label>Amount (R)</label><input id="sFee" type="number" min="0" step="any" value="${s.fee??""}" placeholder="Fee"></div></div><div class="small muted" style="margin-top:4px">Amount = the monthly fee, or the price per class. Custom pricing: enter the agreed monthly amount and explain it below.</div><input id="sFeeNote" value="${esc(s.feeNote||"")}" placeholder="Reason for any special arrangement (optional)" style="margin-top:6px">`;
+}
+function payFieldsRead(){
+ let rid=$("sRecipient").value,nn=$("sNewRecipient").value.trim();
+ if(nn){const ex=db.recipients.find(r=>r.name.toLowerCase()===nn.toLowerCase());rid=(ex||addRecipient(nn,$("sNewRecipientPhone").value)).id}
+ const fee=parseFloat($("sFee").value);
+ return {recipientId:rid,timing:$("sTiming").value,pricing:$("sPricing").value,fee:isNaN(fee)?"":fee,feeNote:$("sFeeNote").value.trim()};
+}
+function statement(rid,month){
+ const lines=db.students.filter(s=>s.recipientId===rid&&s.active!==false).map(s=>{
+   let att=0,abs=0,can=0;
+   db.attendance.forEach(r=>{if(!r.date.startsWith(month))return;r.records.forEach(a=>{if(a.studentId!==s.id)return;if(a.status==="present")att++;else if(a.status==="absent")abs++});if(r.cancelled&&r.records.some(a=>a.studentId===s.id))can++});
+   const fee=Number(s.fee)||0,pricing=s.pricing||"monthly",amount=pricing==="perclass"?fee*att:fee;
+   return {s,att,abs,can,amount,tracked:(s.timing||"advance")!=="perclass",timing:s.timing||"advance",pricing};
+ });
+ const due=lines.filter(l=>l.tracked).reduce((t,l)=>t+l.amount,0),perclass=lines.filter(l=>!l.tracked).reduce((t,l)=>t+l.amount,0);
+ const pays=db.payments.filter(p=>p.recipientId===rid&&p.month===month).sort((a,b)=>a.date.localeCompare(b.date));
+ const paid=pays.reduce((t,p)=>t+Number(p.amount),0);
+ const urgent=lines.some(l=>l.tracked&&l.timing==="advance")||month<monthNow();
+ return {lines,due,perclass,pays,paid,balance:due-paid,urgent};
+}
+function payMonth(){return $("payMonth")?.value||monthNow()}
+function renderPayments(){
+ if(!$("payArea"))return;
+ const m=payMonth(),rows=db.recipients.map(r=>({r,st:statement(r.id,m)})).filter(x=>x.st.lines.some(l=>l.tracked));
+ const owing=rows.filter(x=>x.st.balance>0.005),now=owing.filter(x=>x.st.urgent),soon=owing.filter(x=>!x.st.urgent);
+ const sum=a=>a.reduce((t,x)=>t+x.st.balance,0),got=db.payments.filter(p=>p.month===m).reduce((t,p)=>t+Number(p.amount),0);
+ const row=x=>`<div class="list-item clickable" onclick="openStatement('${x.r.id}')"><div class="row"><div><b>${esc(x.r.name)}</b><div class="small muted">${esc(x.r.ref)} · ${x.st.lines.map(l=>esc(l.s.name)).join(", ")}</div></div><div style="text-align:right"><b>${R(x.st.balance)}</b>${x.st.paid?`<div class="small muted">${R(x.st.paid)} paid</div>`:""}</div></div></div>`;
+ const noFee=db.students.filter(s=>s.active!==false&&(!s.recipientId||s.fee===""||s.fee===undefined)&&(s.pricing||"monthly")!=="custom").length;
+ $("payArea").innerHTML=`<div class="grid three" style="margin-bottom:14px"><div class="card"><div class="stat">${R(sum(owing))}</div><div class="stat-label">Outstanding</div></div><div class="card"><div class="stat">${R(got)}</div><div class="stat-label">Received</div></div><div class="card"><div class="stat">${owing.length}</div><div class="stat-label">Recipients owing</div></div></div>${noFee?`<div class="card small muted" style="margin-bottom:14px">${noFee} active student${noFee>1?"s have":" has"} no recipient or fee yet. Open the student and fill in the Payment section.</div>`:""}<h3>Due now</h3><div class="list">${now.length?now.sort((a,b)=>a.r.name.localeCompare(b.r.name)).map(row).join(""):'<div class="empty">Nothing due.</div>'}</div><h3 style="margin-top:18px">Due soon (end of month)</h3><div class="list">${soon.length?soon.map(row).join(""):'<div class="empty">Nothing coming up.</div>'}</div><h3 style="margin-top:18px">Paid up</h3><div class="list">${rows.filter(x=>x.st.balance<=0.005).map(row).join("")||'<div class="empty">None yet.</div>'}</div>`;
+}
+function openStatement(rid){
+ const r=recById(rid),m=payMonth(),st=statement(rid,m);if(!r)return;
+ const lab=new Date(m+"-15T12:00:00").toLocaleDateString(undefined,{month:"long",year:"numeric"});
+ openModal(`<div class="row"><div><h2>${esc(r.name)}</h2><div class="muted">Reference <b>${esc(r.ref)}</b> · ${esc(lab)}</div></div><button class="btn" onclick="editRecipient('${rid}')">Edit</button></div><table style="margin-top:12px"><thead><tr><th>Student</th><th>Arrangement</th><th>Attended</th><th style="text-align:right">Amount</th></tr></thead><tbody>${st.lines.map(l=>`<tr><td>${esc(l.s.name)}${l.s.feeNote?`<div class="small muted">${esc(l.s.feeNote)}</div>`:""}</td><td class="small">${TIMING[l.timing]}<br>${PRICING[l.pricing]}${l.pricing==="perclass"?" @ "+R(l.s.fee):""}</td><td class="small">${l.att} present${l.abs?`, ${l.abs} absent`:""}${l.can?`, ${l.can} cancelled`:""}</td><td style="text-align:right">${R(l.amount)}${l.tracked?"":'<div class="small muted">paid per class</div>'}</td></tr>`).join("")||'<tr><td colspan="4" class="muted">No active students linked.</td></tr>'}</tbody></table><div class="grid three" style="margin:14px 0"><div class="card"><div class="stat">${R(st.due)}</div><div class="stat-label">Due</div></div><div class="card"><div class="stat">${R(st.paid)}</div><div class="stat-label">Paid</div></div><div class="card"><div class="stat">${R(st.balance)}</div><div class="stat-label">Balance</div></div></div>${st.pays.length?`<h3>Payments</h3>${st.pays.map(p=>`<div class="list-item"><div class="row"><div>${fmt(p.date)} · ${esc(p.method)}${p.reason?`<div class="small muted">${esc(p.reason)}</div>`:""}</div><div><b>${R(p.amount)}</b> <button class="btn danger" onclick="deletePayment('${p.id}','${rid}')">✕</button></div></div></div>`).join("")}`:""}<div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="whatsappReminder('${rid}')">WhatsApp reminder</button><button class="btn primary" onclick="openPayment('${rid}')">Record payment</button><button class="btn" onclick="closeModal()">Close</button></div>`);
+}
+function openPayment(rid){
+ const r=recById(rid),m=payMonth(),st=statement(rid,m);
+ openModal(`<h2>Record payment</h2><div class="muted">${esc(r.name)} · ${esc(r.ref)}</div><div class="grid two"><div><label>Date</label><input id="pDate" type="date" value="${today()}"></div><div><label>For month</label><input id="pMonth" type="month" value="${m}"></div></div><label>Amount (R) — expected ${R(Math.max(st.balance,0))}</label><input id="pAmount" type="number" min="0" step="any" value="${st.balance>0?st.balance:""}"><label>Method</label><select id="pMethod"><option>EFT</option><option>Cash</option><option>Other</option></select><label>Reason (required if the amount differs from the expected amount)</label><input id="pReason" placeholder="e.g. public holiday, reduced fee"><div id="pErr" class="field-error" style="display:none"></div><div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="openStatement('${rid}')">Cancel</button><button class="btn primary" onclick="savePayment('${rid}')">Save payment</button></div>`);
+}
+function savePayment(rid){
+ const amount=parseFloat($("pAmount").value),month=$("pMonth").value||payMonth(),exp=statement(rid,month).balance,reason=$("pReason").value.trim(),err=$("pErr");
+ const bad=m=>{err.textContent=m;err.style.display="block"};
+ if(!(amount>0))return bad("Enter the amount received.");
+ if(Math.abs(amount-exp)>0.005&&!reason)return bad("The amount differs from the expected "+R(Math.max(exp,0))+". Please add a reason.");
+ db.payments.push({id:uid(),recipientId:rid,date:$("pDate").value||today(),month,amount,method:$("pMethod").value,reason});
+ save();$("payMonth").value=month;renderPayments();openStatement(rid);toast("Payment recorded");
+}
+function deletePayment(id,rid){if(!confirm("Delete this payment record?"))return;db.payments=db.payments.filter(p=>p.id!==id);save();renderPayments();openStatement(rid)}
+function editRecipient(rid){
+ const r=recById(rid);
+ openModal(`<h2>Edit recipient</h2><label>Name</label><input id="rName" value="${esc(r.name)}"><label>WhatsApp number</label><input id="rPhone" value="${esc(r.phone||"")}" placeholder="e.g. 082 123 4567"><label>Payment reference</label><input id="rRef" value="${esc(r.ref)}"><div class="small muted">Give this reference to the family to use on every payment.</div><div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="openStatement('${rid}')">Cancel</button><button class="btn primary" onclick="saveRecipient('${rid}')">Save</button></div>`);
+}
+function saveRecipient(rid){
+ const r=recById(rid),n=$("rName").value.trim(),ref=$("rRef").value.trim();
+ if(!n||!ref){alert("Name and reference are required.");return}
+ if(db.recipients.some(x=>x.id!==rid&&x.ref.toLowerCase()===ref.toLowerCase())){alert("That reference is already used by another recipient.");return}
+ r.name=n;r.ref=ref;r.phone=$("rPhone").value.trim();save();renderPayments();openStatement(rid);
+}
+function whatsappReminder(rid){
+ const r=recById(rid),st=statement(rid,payMonth());
+ if(!r.phone){alert("Add a WhatsApp number for this recipient first (Edit).");return}
+ let p=r.phone.replace(/[^\d]/g,"");if(p.startsWith("0"))p="27"+p.slice(1);
+ const msg=`Hi ${r.name}, a friendly reminder that ${R(st.balance)} is outstanding for Alkawn. Please use reference ${r.ref} when paying. Thank you!`;
+ window.open("https://wa.me/"+p+"?text="+encodeURIComponent(msg),"_blank");
+}
+
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
 $("attDate").value=today();
 // Keep the existing local data available as a safety net until cloud data is loaded.

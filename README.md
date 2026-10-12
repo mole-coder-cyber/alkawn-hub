@@ -32,6 +32,15 @@ A single-page web app for running classes: attendance, students, classes, progra
 - Backup downloads a JSON file. In Chrome and Edge on a computer, one chosen file is overwritten each time and is also refreshed automatically after changes. An automatic backup never replaces a fuller backup with a smaller one.
 - Restore replaces the data in the cloud, and therefore on every device, with the backup file. It shows the backup's counts first and asks you to confirm. If the cloud cannot be updated, nothing is changed.
 
+## Payments
+
+- **Payments tab**: pick a month to see Due now, Due soon (end-of-month payers) and Paid up, with totals.
+- **Student form → Payment**: Invoice Recipient (who pays; siblings share one), payment timing, pricing method and amount.
+- **Recipient**: each gets a unique reference such as `ALK-001` to use on every bank payment. Edit it, and add a WhatsApp number, from the statement.
+- **Statement**: attendance and amount per student, payments made and the balance. Per-class payers are shown but never flagged as unpaid.
+- **Record payment**: a different amount from the expected one needs a reason.
+- **WhatsApp reminder**: opens WhatsApp with a ready message; you tap Send. Nothing is sent automatically.
+
 ## How the data is stored and kept in sync
 
 - All data for one login is stored as **one JSON document** in the Supabase table `alkawn_data` (one row per user: `user_id`, `data`, `updated_at`).
@@ -111,7 +120,7 @@ Open the app online once (twice after an update) on each device so it can save a
 - When two devices change the very same item at the same moment, the cloud value wins (a backup of the other version is downloaded).
 - If two devices open the same lesson at the same moment, two copies can briefly exist. They are combined automatically the next time a device loads or refreshes, keeping the one with attendance marked.
 - Duplicate student names are blocked when saving a student (the form shows the problem in red), but two devices adding the same new name at the same moment while offline could still create a duplicate after the merge.
-- Payments, venues and the wider business modules are not part of this attendance version.
+- Venues and the wider business modules are not part of this version. Payments are recorded by hand (no bank connection, no PDF invoices yet).
 
 ## Testing
 
