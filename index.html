@@ -161,7 +161,7 @@ dialog{border:0;border-radius:13px;padding:0;width:min(560px,calc(100% - 24px));
   </section>
 
   <section id="payments" class="view">
-    <div class="row" style="margin-bottom:14px"><div><h1>Payments</h1><div class="muted">Who owes what for the month. Tap a family to see the statement.</div></div><input id="payMonth" type="month" class="month-input" onchange="renderPayments()"></div>
+    <div class="row" style="margin-bottom:14px"><div><h1>Payments</h1><div class="muted">Who owes what for the month. Tap a family to see the statement.</div></div><div class="actions"><button class="btn" onclick="openRates()">Drop-in rates</button><input id="payMonth" type="month" class="month-input" onchange="renderPayments()"></div></div>
     <div id="payArea"></div>
   </section>
 
@@ -567,7 +567,7 @@ window.addEventListener("online",()=>{cloudRetryDelay=5000;clearTimeout(cloudRet
 window.addEventListener("offline",()=>{if(cloudReady)goOffline()});
 function migrateData(){
  db.students=Array.isArray(db.students)?db.students:[];db.classes=Array.isArray(db.classes)?db.classes:[];db.attendance=Array.isArray(db.attendance)?db.attendance:[];
- db.programs=Array.isArray(db.programs)?db.programs:[];db.recipients=Array.isArray(db.recipients)?db.recipients:[];db.payments=Array.isArray(db.payments)?db.payments:[];
+ db.programs=Array.isArray(db.programs)?db.programs:[];db.recipients=Array.isArray(db.recipients)?db.recipients:[];db.payments=Array.isArray(db.payments)?db.payments:[];db.dropRates=Array.isArray(db.dropRates)?db.dropRates:[];
  db.students.forEach(s=>{if(!Array.isArray(s.labelIds))s.labelIds=[];if(s.programId===undefined)s.programId="";delete s.subcategory});
  db.classes.forEach(c=>{if(!Array.isArray(c.days))c.days=c.day?[c.day]:[];if(c.day===undefined)c.day=c.days[0]||"";if(c.programId===undefined)c.programId="";if(c.listMode===undefined)c.listMode="manual";if(c.defaultLabelId===undefined)c.defaultLabelId=""});
  db.programs.forEach((p,pi)=>{if(!Array.isArray(p.labels))p.labels=[];if(p.colorIndex===undefined)p.colorIndex=pi%10;p.labels.forEach((l,li)=>{if(l.colorIndex===undefined)l.colorIndex=li%10})});
@@ -831,6 +831,7 @@ function attendanceRow(a,classId,date,future=false,simple=false){
  <button ${disabled} class="${a.status==="present"?"selected-present":""}" onclick="setAttendance('${classId}','${date}','${a.studentId||""}','present')">Present</button>
  <button ${disabled} class="${a.status==="absent"?"selected-absent":""}" onclick="setAttendance('${classId}','${date}','${a.studentId||""}','absent')">Absent</button>
  ${!future&&a.status==="absent"?`<button onclick="editReason('${classId}','${date}','${a.studentId||""}')">Reason</button>`:""}
+ ${payBtn(a,classId,date,s)}
  ${a.temporary?`<button onclick="confirmRemoveTemporary('${classId}','${date}','${a.studentId}')">Remove</button>`:""}
  </div></div>`
 }
@@ -866,9 +867,9 @@ function removeTemporary(classId,date,studentId){
 }
 function addTemporary(classId,date){
  let future=date>today();
- openModal(`<h2>Add temporary student</h2><div class="muted small">This person will be recorded for this session only and will not be added to the class permanently.${future?" This is a future lesson, so attendance can be marked when the lesson happens.":""}</div><label>Name</label><input id="tempName" placeholder="Student name"><div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveTemporary('${classId}','${date}')">Add</button></div>`);
+ openModal(`<h2>Add temporary student</h2><div class="muted small">This person will be recorded for this session only and will not be added to the class permanently.${future?" This is a future lesson, so attendance can be marked when the lesson happens.":""}</div><label>Name</label><input id="tempName" placeholder="Student name">${dropInFields({})}<div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveTemporary('${classId}','${date}')">Add</button></div>`);
 }
-function saveTemporary(classId,date){let name=$("tempName").value.trim();if(!name)return;let r=getRecord(classId,date);r.records.push({studentId:"temp_"+uid(),name,status:null,reason:"",temporary:true});save();closeModal();renderAttendance();toast("Temporary student added")}
+function saveTemporary(classId,date){let name=$("tempName").value.trim();if(!name)return;let r=getRecord(classId,date);const na={studentId:"temp_"+uid(),name,status:null,reason:"",temporary:true},f=dropInRead();if(f)na.fee=f;r.records.push(na);save();renderPayments();closeModal();renderAttendance();toast("Temporary student added")}
 
 function editSession(classId,date){
  const c=db.classes.find(x=>x.id===classId),r=ensureRecord(classId,date);if(!c||!r)return;
@@ -1070,7 +1071,7 @@ function renderStudentProfile(id){
  let month=$("studentMonth")?.value||today().slice(0,7),st=studentMonthStats(id,month),monthLabel=new Date(month+"-01T12:00:00").toLocaleDateString(undefined,{month:"long",year:"numeric"});
  let rows=st.rows;
  let program=programById(s.programId),labels=studentLabels(s);
- $("modalBody").innerHTML=`<div class="row"><div><h2>${esc(s.name)}</h2><div class="muted">${s.active?"Active":"Inactive"}${program?`<div style="margin-top:6px"><span class="tag-chip" style="${tagStyle("program",program.colorIndex)}">${esc(program.name)}</span></div>`:""}</div>${labels.length?`<div class="tag-list" style="margin-top:7px;display:flex;gap:5px;flex-wrap:wrap">${labels.map(l=>`<span class="tag-chip" style="${tagStyle("label",l.colorIndex)}">${esc(l.name)}</span>`).join("")}</div>`:""}${s.notes?`<div class="small muted" style="margin-top:8px"><b>Notes:</b> ${esc(s.notes)}</div>`:""}</div><button class="btn" onclick="closeModal();openStudent('${id}')">Edit</button></div><div class="month-nav student-month-nav"><button class="btn" onclick="changeStudentMonth('${id}',-1)">←</button><input id="studentMonth" class="month-input" type="month" value="${month}" onchange="renderStudentProfile('${id}')" onwheel="studentMonthWheel(event,'${id}')"><button class="btn" onclick="changeStudentMonth('${id}',1)">→</button></div><div class="grid three student-stats" style="margin:14px 0"><div class="card"><div class="stat">${st.attended}</div><div class="stat-label">Attended</div></div><div class="card"><div class="stat">${st.absent}</div><div class="stat-label">Missed</div></div><div class="card"><div class="stat">${st.recorded}</div><div class="stat-label">Recorded</div></div></div><h3>Attendance for ${esc(monthLabel)}</h3>${rows.length?`<table><thead><tr><th>Date</th><th>Class</th><th>Result</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${fmt(x.date)}</td><td>${esc(x.className)}</td><td><span class="badge ${x.status==="present"?"present":x.status==="absent"?"absent":"pending"}">${x.status||"Not marked"}</span>${x.reason?` <span class="small muted">— ${esc(x.reason)}</span>`:""}</td></tr>`).join("")}</tbody></table>`:`<div class="empty">No attendance has been recorded for this student in ${esc(monthLabel)}.</div>`}<div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn danger" onclick="deleteStudent('${id}')">Delete Student</button><button class="btn" onclick="closeModal()">Close</button></div>`;
+ $("modalBody").innerHTML=`<div class="row"><div><h2>${esc(s.name)}</h2><div class="muted">${s.active?"Active":"Inactive"}${program?`<div style="margin-top:6px"><span class="tag-chip" style="${tagStyle("program",program.colorIndex)}">${esc(program.name)}</span></div>`:""}</div>${labels.length?`<div class="tag-list" style="margin-top:7px;display:flex;gap:5px;flex-wrap:wrap">${labels.map(l=>`<span class="tag-chip" style="${tagStyle("label",l.colorIndex)}">${esc(l.name)}</span>`).join("")}</div>`:""}${payLine(s)}${s.notes?`<div class="small muted" style="margin-top:8px"><b>Notes:</b> ${esc(s.notes)}</div>`:""}</div><button class="btn" onclick="closeModal();openStudent('${id}')">Edit</button></div><div class="month-nav student-month-nav"><button class="btn" onclick="changeStudentMonth('${id}',-1)">←</button><input id="studentMonth" class="month-input" type="month" value="${month}" onchange="renderStudentProfile('${id}')" onwheel="studentMonthWheel(event,'${id}')"><button class="btn" onclick="changeStudentMonth('${id}',1)">→</button></div><div class="grid three student-stats" style="margin:14px 0"><div class="card"><div class="stat">${st.attended}</div><div class="stat-label">Attended</div></div><div class="card"><div class="stat">${st.absent}</div><div class="stat-label">Missed</div></div><div class="card"><div class="stat">${st.recorded}</div><div class="stat-label">Recorded</div></div></div><h3>Attendance for ${esc(monthLabel)}</h3>${rows.length?`<table><thead><tr><th>Date</th><th>Class</th><th>Result</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${fmt(x.date)}</td><td>${esc(x.className)}</td><td><span class="badge ${x.status==="present"?"present":x.status==="absent"?"absent":"pending"}">${x.status||"Not marked"}</span>${x.reason?` <span class="small muted">— ${esc(x.reason)}</span>`:""}</td></tr>`).join("")}</tbody></table>`:`<div class="empty">No attendance has been recorded for this student in ${esc(monthLabel)}.</div>`}<div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn danger" onclick="deleteStudent('${id}')">Delete Student</button><button class="btn" onclick="closeModal()">Close</button></div>`;
 }
 function studentProfile(id){
  let s=db.students.find(x=>x.id===id);if(!s)return;
@@ -1471,7 +1472,7 @@ function nextRef(){const n=db.recipients.reduce((m,r)=>Math.max(m,parseInt(Strin
 function addRecipient(name,phone){const r={id:uid(),name:name.trim(),phone:(phone||"").trim(),ref:nextRef(),notes:""};db.recipients.push(r);return r}
 function payFields(s){
  const sel=db.recipients.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(r=>`<option value="${r.id}" ${s.recipientId===r.id?"selected":""}>${esc(r.name)} (${esc(r.ref)})</option>`).join("");
- return `<h3 style="margin:16px 0 0">Payment</h3><label style="display:flex;gap:8px;align-items:center;margin-top:10px"><input type="checkbox" id="sSelfPay" onchange="selfPayToggle()" style="width:auto;margin:0" ${selfPays(s)?"checked":""}> This student pays for themself</label><div class="small muted" style="margin-top:2px">Uses the student's own name as the Invoice Recipient, so you don't type it again.</div><label>Invoice Recipient (who pays)</label><select id="sRecipient" ${selfPays(s)?"disabled":""}><option value="">— none yet —</option>${sel}</select><input id="sNewRecipient" placeholder="Or add a new recipient (name)" style="margin-top:6px" ${selfPays(s)?"disabled":""}><input id="sNewRecipientPhone" placeholder="Their WhatsApp number (optional)" style="margin-top:6px"><div class="grid three"><div><label>Payment timing</label><select id="sTiming">${Object.entries(TIMING).map(([k,v])=>`<option value="${k}" ${(s.timing||"advance")===k?"selected":""}>${v}</option>`).join("")}</select></div><div><label>Pricing method</label><select id="sPricing">${Object.entries(PRICING).map(([k,v])=>`<option value="${k}" ${(s.pricing||"monthly")===k?"selected":""}>${v}</option>`).join("")}</select></div><div><label>Amount (R)</label><input id="sFee" type="number" min="0" step="any" value="${s.fee??""}" placeholder="Fee"></div></div><div class="small muted" style="margin-top:4px">Amount = the monthly fee, or the price per class. Custom pricing: enter the agreed monthly amount and explain it below.</div><input id="sFeeNote" value="${esc(s.feeNote||"")}" placeholder="Reason for any special arrangement (optional)" style="margin-top:6px">`;
+ return `<h3 style="margin:16px 0 0">Payment</h3><label style="display:flex;gap:8px;align-items:center;margin-top:10px"><input type="checkbox" id="sSelfPay" onchange="selfPayToggle()" style="width:auto;margin:0" ${selfPays(s)?"checked":""}> This student pays for themself</label><div class="small muted" style="margin-top:2px">Uses the student's own name as the Invoice Recipient, so you don't type it again.</div><label>Invoice Recipient (who pays)</label><select id="sRecipient" ${selfPays(s)?"disabled":""}><option value="">— none yet —</option>${sel}</select><input id="sNewRecipient" placeholder="Or add a new recipient (name)" style="margin-top:6px" ${selfPays(s)?"disabled":""}><input id="sNewRecipientPhone" placeholder="Their WhatsApp number (optional)" style="margin-top:6px"><div class="grid three"><div><label>Payment timing</label><select id="sTiming">${Object.entries(TIMING).map(([k,v])=>`<option value="${k}" ${(s.timing||"advance")===k?"selected":""}>${v}</option>`).join("")}</select></div><div><label>Pricing method</label><select id="sPricing">${Object.entries(PRICING).map(([k,v])=>`<option value="${k}" ${(s.pricing||"monthly")===k?"selected":""}>${v}</option>`).join("")}</select></div><div><label>Amount (R)</label><input id="sFee" type="number" min="0" step="any" value="${s.fee??""}" placeholder="Fee"></div></div><label>Next payment due</label><input id="sNextDue" type="date" value="${s.nextDue||""}"><div class="small muted" style="margin-top:4px">Amount = the monthly fee, or the price per class. Custom pricing: enter the agreed monthly amount and explain it below.</div><input id="sFeeNote" value="${esc(s.feeNote||"")}" placeholder="Reason for any special arrangement (optional)" style="margin-top:6px">`;
 }
 const normName=x=>String(x||"").trim().replace(/\s+/g," ").toLowerCase();
 function selfPays(s){const r=s&&s.recipientId&&recById(s.recipientId);return !!(r&&s.name&&normName(r.name)===normName(s.name))}
@@ -1481,7 +1482,13 @@ function payFieldsRead(studentName){
  if($("sSelfPay").checked){const ex=db.recipients.find(r=>normName(r.name)===normName(studentName));const r=ex||addRecipient(studentName,$("sNewRecipientPhone").value);if(ex&&!ex.phone&&$("sNewRecipientPhone").value.trim())ex.phone=$("sNewRecipientPhone").value.trim();rid=r.id}
  else if(nn){const ex=db.recipients.find(r=>r.name.toLowerCase()===nn.toLowerCase());rid=(ex||addRecipient(nn,$("sNewRecipientPhone").value)).id}
  const fee=parseFloat($("sFee").value);
- return {recipientId:rid,timing:$("sTiming").value,pricing:$("sPricing").value,fee:isNaN(fee)?"":fee,feeNote:$("sFeeNote").value.trim()};
+ return {recipientId:rid,timing:$("sTiming").value,pricing:$("sPricing").value,fee:isNaN(fee)?"":fee,feeNote:$("sFeeNote").value.trim(),nextDue:$("sNextDue").value};
+}
+function payLine(s){
+ const r=s.recipientId&&recById(s.recipientId);
+ if(!r&&(s.fee===""||s.fee===undefined))return `<div class="small muted" style="margin-top:8px"><b>Payment:</b> not set up yet</div>`;
+ const pr=s.pricing||"monthly",fee=s.fee===""||s.fee===undefined?"no amount":R(s.fee)+(pr==="perclass"?" per class":pr==="custom"?" (custom)":" per month");
+ return `<div class="small" style="margin-top:8px;line-height:1.6"><b>Payment:</b> ${TIMING[s.timing||"advance"]} · ${PRICING[pr]} · ${fee}${r?`${s.nextDue?`<br><b>Next payment due:</b> ${fmt(s.nextDue)} (${dueTag(s.nextDue)})`:""}<br><b>Paid by:</b> ${esc(r.name)} (${esc(r.ref)}) <a href="#" onclick="event.preventDefault();closeModal();openStatement('${r.id}')">View statement</a>`:""}${s.feeNote?`<br><span class="muted">${esc(s.feeNote)}</span>`:""}</div>`;
 }
 function statement(rid,month){
  const lines=db.students.filter(s=>s.recipientId===rid&&s.active!==false).map(s=>{
@@ -1493,18 +1500,19 @@ function statement(rid,month){
  const due=lines.filter(l=>l.tracked).reduce((t,l)=>t+l.amount,0),perclass=lines.filter(l=>!l.tracked).reduce((t,l)=>t+l.amount,0);
  const pays=db.payments.filter(p=>p.recipientId===rid&&p.month===month).sort((a,b)=>a.date.localeCompare(b.date));
  const paid=pays.reduce((t,p)=>t+Number(p.amount),0);
- const urgent=lines.some(l=>l.tracked&&l.timing==="advance")||month<monthNow();
- return {lines,due,perclass,pays,paid,balance:due-paid,urgent};
+ const dues=lines.filter(l=>l.tracked&&l.s.nextDue).map(l=>l.s.nextDue).sort(),nextDue=dues[0]||"";
+ const urgent=nextDue?nextDue<=today():(lines.some(l=>l.tracked&&l.timing==="advance")||month<monthNow());
+ return {lines,due,perclass,pays,paid,balance:due-paid,urgent,nextDue};
 }
 function payMonth(){return $("payMonth")?.value||monthNow()}
 function renderPayments(){
  if(!$("payArea"))return;
  const m=payMonth(),rows=db.recipients.map(r=>({r,st:statement(r.id,m)})).filter(x=>x.st.lines.some(l=>l.tracked));
  const owing=rows.filter(x=>x.st.balance>0.005),now=owing.filter(x=>x.st.urgent),soon=owing.filter(x=>!x.st.urgent);
- const sum=a=>a.reduce((t,x)=>t+x.st.balance,0),got=db.payments.filter(p=>p.month===m).reduce((t,p)=>t+Number(p.amount),0);
- const row=x=>`<div class="list-item clickable" onclick="openStatement('${x.r.id}')"><div class="row"><div><b>${esc(x.r.name)}</b><div class="small muted">${esc(x.r.ref)} · ${x.st.lines.map(l=>esc(l.s.name)).join(", ")}</div></div><div style="text-align:right"><b>${R(x.st.balance)}</b>${x.st.paid?`<div class="small muted">${R(x.st.paid)} paid</div>`:""}</div></div></div>`;
+ const sum=a=>a.reduce((t,x)=>t+x.st.balance,0),di=dropIns(m),got=db.payments.filter(p=>p.month===m).reduce((t,p)=>t+Number(p.amount),0)+di.filter(x=>x.a.fee.method!=="Unpaid").reduce((t,x)=>t+x.a.fee.amount,0),diOwe=di.filter(x=>x.a.fee.method==="Unpaid");
+ const row=x=>`<div class="list-item clickable" onclick="openStatement('${x.r.id}')"><div class="row"><div><b>${esc(x.r.name)}</b><div class="small muted">${esc(x.r.ref)} · ${x.st.lines.map(l=>esc(l.s.name)).join(", ")}${x.st.nextDue?" · "+dueTag(x.st.nextDue):""}</div></div><div style="text-align:right"><b>${R(x.st.balance)}</b>${x.st.paid?`<div class="small muted">${R(x.st.paid)} paid</div>`:""}</div></div></div>`;
  const noFee=db.students.filter(s=>s.active!==false&&(!s.recipientId||s.fee===""||s.fee===undefined)&&(s.pricing||"monthly")!=="custom").length;
- $("payArea").innerHTML=`<div class="grid three" style="margin-bottom:14px"><div class="card"><div class="stat">${R(sum(owing))}</div><div class="stat-label">Outstanding</div></div><div class="card"><div class="stat">${R(got)}</div><div class="stat-label">Received</div></div><div class="card"><div class="stat">${owing.length}</div><div class="stat-label">Recipients owing</div></div></div>${noFee?`<div class="card small muted" style="margin-bottom:14px">${noFee} active student${noFee>1?"s have":" has"} no recipient or fee yet. Open the student and fill in the Payment section.</div>`:""}<h3>Due now</h3><div class="list">${now.length?now.sort((a,b)=>a.r.name.localeCompare(b.r.name)).map(row).join(""):'<div class="empty">Nothing due.</div>'}</div><h3 style="margin-top:18px">Due soon (end of month)</h3><div class="list">${soon.length?soon.map(row).join(""):'<div class="empty">Nothing coming up.</div>'}</div><h3 style="margin-top:18px">Paid up</h3><div class="list">${rows.filter(x=>x.st.balance<=0.005).map(row).join("")||'<div class="empty">None yet.</div>'}</div>`;
+ $("payArea").innerHTML=`<div class="grid three" style="margin-bottom:14px"><div class="card"><div class="stat">${R(sum(owing))}</div><div class="stat-label">Outstanding</div></div><div class="card"><div class="stat">${R(got)}</div><div class="stat-label">Received</div></div><div class="card"><div class="stat">${owing.length}</div><div class="stat-label">Recipients owing</div></div></div>${noFee?`<div class="card small muted" style="margin-bottom:14px">${noFee} active student${noFee>1?"s have":" has"} no recipient or fee yet. Open the student and fill in the Payment section.</div>`:""}${diOwe.length?`<h3>Drop-ins owing</h3><div class="list" style="margin-bottom:18px">${diOwe.map(x=>`<div class="list-item clickable" onclick="editDropIn('${x.r.classId}','${x.r.date}','${x.a.studentId}')"><div class="row"><div><b>${esc(x.name)}</b><div class="small muted">${esc(x.r.className||"Class")} · ${fmt(x.r.date)}</div></div><b>${R(x.a.fee.amount)}</b></div></div>`).join("")}</div>`:""}<h3>Due now</h3><div class="list">${now.length?now.sort((a,b)=>(a.st.nextDue||"9").localeCompare(b.st.nextDue||"9")||a.r.name.localeCompare(b.r.name)).map(row).join(""):'<div class="empty">Nothing due.</div>'}</div><h3 style="margin-top:18px">Due soon (end of month)</h3><div class="list">${soon.length?soon.map(row).join(""):'<div class="empty">Nothing coming up.</div>'}</div><h3 style="margin-top:18px">Paid up</h3><div class="list">${rows.filter(x=>x.st.balance<=0.005).map(row).join("")||'<div class="empty">None yet.</div>'}</div>`;
 }
 function openStatement(rid){
  const r=recById(rid),m=payMonth(),st=statement(rid,m);if(!r)return;
@@ -1513,7 +1521,7 @@ function openStatement(rid){
 }
 function openPayment(rid){
  const r=recById(rid),m=payMonth(),st=statement(rid,m);
- openModal(`<h2>Record payment</h2><div class="muted">${esc(r.name)} · ${esc(r.ref)}</div><div class="grid two"><div><label>Date</label><input id="pDate" type="date" value="${today()}"></div><div><label>For month</label><input id="pMonth" type="month" value="${m}"></div></div><label>Amount (R) — expected ${R(Math.max(st.balance,0))}</label><input id="pAmount" type="number" min="0" step="any" value="${st.balance>0?st.balance:""}"><label>Method</label><select id="pMethod"><option>EFT</option><option>Cash</option><option>Other</option></select><label>Reason (required if the amount differs from the expected amount)</label><input id="pReason" placeholder="e.g. public holiday, reduced fee"><div id="pErr" class="field-error" style="display:none"></div><div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="openStatement('${rid}')">Cancel</button><button class="btn primary" onclick="savePayment('${rid}')">Save payment</button></div>`);
+ openModal(`<h2>Record payment</h2><div class="muted">${esc(r.name)} · ${esc(r.ref)}</div><div class="grid two"><div><label>Date</label><input id="pDate" type="date" value="${today()}"></div><div><label>For month</label><input id="pMonth" type="month" value="${m}"></div></div><label>Amount (R) — expected ${R(Math.max(st.balance,0))}</label><input id="pAmount" type="number" min="0" step="any" value="${st.balance>0?st.balance:""}"><label>Method</label><select id="pMethod"><option>EFT</option><option>Cash</option><option>Other</option></select><label>Reason (required if the amount differs from the expected amount)</label><input id="pReason" placeholder="e.g. public holiday, reduced fee"><label>Next payment due (updates the students on this statement)</label><input id="pNext" type="date" value="${suggestNext(rid,m)}"><div id="pErr" class="field-error" style="display:none"></div><div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="openStatement('${rid}')">Cancel</button><button class="btn primary" onclick="savePayment('${rid}')">Save payment</button></div>`);
 }
 function savePayment(rid){
  const amount=parseFloat($("pAmount").value),month=$("pMonth").value||payMonth(),exp=statement(rid,month).balance,reason=$("pReason").value.trim(),err=$("pErr");
@@ -1521,6 +1529,7 @@ function savePayment(rid){
  if(!(amount>0))return bad("Enter the amount received.");
  if(Math.abs(amount-exp)>0.005&&!reason)return bad("The amount differs from the expected "+R(Math.max(exp,0))+". Please add a reason.");
  db.payments.push({id:uid(),recipientId:rid,date:$("pDate").value||today(),month,amount,method:$("pMethod").value,reason});
+ const nd=$("pNext").value;if(nd)db.students.forEach(x=>{if(x.recipientId===rid&&x.active!==false&&(x.timing||"advance")!=="perclass")x.nextDue=nd});
  save();$("payMonth").value=month;renderPayments();openStatement(rid);toast("Payment recorded");
 }
 function deletePayment(id,rid){if(!confirm("Delete this payment record?"))return;db.payments=db.payments.filter(p=>p.id!==id);save();renderPayments();openStatement(rid)}
@@ -1540,6 +1549,57 @@ function whatsappReminder(rid){
  let p=r.phone.replace(/[^\d]/g,"");if(p.startsWith("0"))p="27"+p.slice(1);
  const msg=`Hi ${r.name}, a friendly reminder that ${R(st.balance)} is outstanding for Alkawn. Please use reference ${r.ref} when paying. Thank you!`;
  window.open("https://wa.me/"+p+"?text="+encodeURIComponent(msg),"_blank");
+}
+
+// ===== Drop-in rates, due dates, class-time payments =====
+const ymd=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+function suggestNext(rid,month){
+ const s=db.students.find(x=>x.recipientId===rid&&x.active!==false&&(x.timing||"advance")!=="perclass");
+ if(!s)return "";const [y,m]=month.split("-").map(Number);
+ return ymd((s.timing||"advance")==="end"?new Date(y,m+1,0):new Date(y,m,1));
+}
+function daysLate(d){return Math.floor((new Date(today()+"T12:00:00")-new Date(d+"T12:00:00"))/864e5)}
+function dueTag(d){if(!d)return "";const n=daysLate(d);return n>0?`<span style="color:#b42318;font-weight:600">overdue ${n} day${n>1?"s":""}</span>`:n===0?"due today":"due "+fmt(d)}
+function dropIns(m){const out=[];db.attendance.forEach(r=>{if(!r.date.startsWith(m)||r.cancelled)return;r.records.forEach(a=>{if(a.fee)out.push({r,a,name:(db.students.find(s=>s.id===a.studentId)||{}).name||a.name||"Student"})})});return out}
+function dropInFields(a){
+ const f=a.fee||{};
+ return `<label>Drop-in rate</label><select id="dRate" onchange="dropRatePick()"><option value="">Custom amount</option>${db.dropRates.map(r=>`<option value="${r.id}" ${f.rate===r.name&&Number(f.amount)===Number(r.amount)?"selected":""}>${esc(r.name)} — ${R(r.amount)}</option>`).join("")}</select><label>Amount (R)</label><input id="dAmt" type="number" min="0" step="any" value="${f.amount??""}"><label>Payment</label><select id="dMethod">${["Cash","EFT","Other","Unpaid"].map(x=>`<option value="${x}" ${f.method===x?"selected":""}>${x==="Unpaid"?"Not paid yet":x}</option>`).join("")}</select><div class="small muted" style="margin-top:4px">Add or change rates under Payments → Drop-in rates.</div>`;
+}
+function dropRatePick(){const r=db.dropRates.find(x=>x.id===$("dRate").value);if(r)$("dAmt").value=r.amount}
+function dropInRead(){
+ const amt=parseFloat($("dAmt").value);if(isNaN(amt))return null;
+ const sel=$("dRate"),rate=sel.value?db.dropRates.find(x=>x.id===sel.value)?.name:"Custom";
+ return {amount:amt,method:$("dMethod").value,rate:rate||"Custom"};
+}
+function editDropIn(classId,date,sid){
+ const a=getRecord(classId,date).records.find(x=>x.studentId===sid);if(!a)return;
+ const s=db.students.find(x=>x.id===sid);
+ openModal(`<h2>Payment at class</h2><div class="muted">${esc(s?s.name:a.name||"Student")} · ${fmt(date)}</div>${dropInFields(a)}<div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button>${a.fee?`<button class="btn danger" onclick="saveDropIn('${classId}','${date}','${sid}',true)">Clear</button>`:""}<button class="btn primary" onclick="saveDropIn('${classId}','${date}','${sid}')">Save</button></div>`);
+}
+function saveDropIn(classId,date,sid,clear){
+ const a=getRecord(classId,date).records.find(x=>x.studentId===sid);if(!a)return;
+ const f=clear?null:dropInRead();if(f)a.fee=f;else delete a.fee;
+ save();closeModal();renderAttendance();renderPayments();
+}
+function payBtn(a,classId,date,s){
+ if(date>today()||!(a.temporary||(s&&s.timing==="perclass")))return "";
+ const f=a.fee,t=f?(f.method==="Unpaid"?"Owes "+R(f.amount):R(f.amount)+" · "+f.method):"Payment";
+ return `<button onclick="editDropIn('${classId}','${date}','${a.studentId}')">${t}</button>`;
+}
+function openRates(){
+ const row=(r,i)=>`<div class="row" style="gap:8px;margin-top:8px"><input id="rtN${i}" value="${esc(r.name)}" placeholder="Name, e.g. Standard"><input id="rtA${i}" type="number" min="0" step="any" value="${r.amount}" placeholder="R" style="max-width:110px"><button class="btn danger" onclick="rateRemove(${i})">✕</button></div>`;
+ window._rates=db.dropRates.map(r=>({...r}));
+ const draw=()=>{$("rateRows").innerHTML=window._rates.map(row).join("")||'<div class="empty">No rates yet.</div>'};
+ openModal(`<h2>Drop-in rates</h2><div class="muted small">Create the rates you charge temporary students, e.g. different venues. You pick one when adding a temporary student.</div><div id="rateRows"></div><button class="btn" style="margin-top:10px" onclick="rateAdd()">+ Add rate</button><div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="rateSave()">Save</button></div>`);
+ window._drawRates=draw;draw();
+}
+function rateSync(){window._rates.forEach((r,i)=>{r.name=$("rtN"+i).value.trim();r.amount=parseFloat($("rtA"+i).value)})}
+function rateAdd(){rateSync();window._rates.push({id:uid(),name:"",amount:""});window._drawRates()}
+function rateRemove(i){rateSync();window._rates.splice(i,1);window._drawRates()}
+function rateSave(){
+ rateSync();const ok=window._rates.filter(r=>r.name||!isNaN(r.amount));
+ if(ok.some(r=>!r.name||isNaN(r.amount))){alert("Every rate needs a name and an amount.");return}
+ db.dropRates=ok;save();closeModal();toast("Drop-in rates saved");
 }
 
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});

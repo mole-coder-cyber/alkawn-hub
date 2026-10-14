@@ -39,6 +39,9 @@ A single-page web app for running classes: attendance, students, classes, progra
 - **Recipient**: each gets a unique reference such as `ALK-001` to use on every bank payment. Edit it, and add a WhatsApp number, from the statement.
 - **Statement**: attendance and amount per student, payments made and the balance. Per-class payers are shown but never flagged as unpaid.
 - **Record payment**: a different amount from the expected one needs a reason.
+- **Next payment due**: set on each student (past or future dates both work). Recording a payment suggests the next date, end of next month for end-of-month payers, and the Payments tab shows overdue days.
+- **Drop-in rates**: Payments → Drop-in rates. Create your own rates (name + amount); nothing is hardcoded.
+- **Payment at class**: when adding a temporary student, pick a rate and Cash/EFT/Not paid yet. The button on their attendance row (and on per-class students) edits it later. Unpaid drop-ins appear under "Drop-ins owing".
 - **WhatsApp reminder**: opens WhatsApp with a ready message; you tap Send. Nothing is sent automatically.
 
 ## How the data is stored and kept in sync
