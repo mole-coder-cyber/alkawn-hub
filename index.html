@@ -156,7 +156,11 @@ dialog{border:0;border-radius:13px;padding:0;width:min(560px,calc(100% - 24px));
       <div><label>Search</label><input id="classSearch" placeholder="Search classes..." oninput="renderClasses()"></div>
       <div><label>Program</label><select id="classProgramFilter" onchange="classProgramFilterChanged()"></select></div>
       <div><label>Label</label><select id="classLabelFilter" onchange="renderClasses()"></select></div>
-    </div></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px 14px;flex-wrap:wrap;margin-top:12px"><div class="seg-group"><button id="cvAll" class="active" onclick="setClassView('all')">All Classes</button><button id="cvDay" onclick="setClassView('day')">By Day</button></div><div class="seg-group"><button id="csAct" class="active" onclick="setClassStatus('active')">Active</button><button id="csPau" onclick="setClassStatus('paused')">Paused</button><button id="csAll" onclick="setClassStatus('all')">All</button></div></div>
+    </div>
+    <div id="classDayBar" style="display:none;margin-top:10px"></div>
+    <div id="classCount" class="small muted" style="margin:8px 0"></div>
     <div id="classesArea" class="list"></div>
   </section>
 
@@ -650,8 +654,8 @@ function currentPause(c){
 }
 function pauseText(c){
  const p=currentPause(c);if(!p)return"";
- const back=p.until?`back on ${fmtClassDate(p.until)}`:"no return date";
- return p.from>today()?`Pauses from ${fmtClassDate(p.from)}${p.until?" · "+back:""}`:`Paused since ${fmtClassDate(p.from)} · ${back}`;
+ const back=p.until?`back on ${fmtClassDate(p.until)}`:"";
+ return p.from>today()?`Pauses from ${fmtClassDate(p.from)}${p.until?" · "+back:""}`:`Paused since ${fmtClassDate(p.from)}${back?" · "+back:""}`;
 }
 function pauseBadge(c){
  const t=pauseText(c);if(!t)return"";
@@ -1151,11 +1155,32 @@ function populateClassFilters(){
  if(l&&!labelsForProgram(p?.value||"").some(x=>x.id===oldL))l.value="";
 }
 function classProgramFilterChanged(){populateLabelSelect("classLabelFilter","",true,$("classProgramFilter").value);renderClasses()}
+let classStatusMode="active",classViewMode="all",classDay=(new Date().getDay()+6)%7;
+const DAYNAMES=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+function setClassStatus(m){classStatusMode=m;renderClasses()}
+function setClassView(v){classViewMode=v;renderClasses()}
+function setClassDay(i){classDay=i;renderClasses()}
+function classOnDay(c,i){return classType(c)!=="once"&&classDaysList(c).some(d=>String(d).toLowerCase().startsWith(DAYNAMES[i].slice(0,3).toLowerCase()))}
 function renderClasses(){
  const q=($("classSearch")?.value||"").toLowerCase().trim(),pf=$("classProgramFilter")?.value||"",lf=$("classLabelFilter")?.value||"";
- const sorted=db.classes.slice().sort((a,b)=>(isPausedNow(a)?1:0)-(isPausedNow(b)?1:0)||String(a.name||"").localeCompare(String(b.name||""),undefined,{sensitivity:"base",numeric:true}));
- const list=sorted.filter(c=>(!q||classSearchText(c).includes(q))&&(!pf||c.programId===pf)&&(!lf||c.defaultLabelId===lf));
- $("classesArea").innerHTML=list.length?list.map(c=>{let p=programById(c.programId),label=labelById(c.defaultLabelId);return `<div class="card" style="${isPausedNow(c)?"opacity:.82":""}"><div class="row"><div style="cursor:pointer;flex:1" onclick="classProfile('${c.id}')" title="Open class profile"><h2>${esc(c.name)}</h2><div class="muted">${esc(classScheduleText(c))} · ${activeClassStudentIds(c).length} default students</div><div class="small" style="margin-top:6px">${classTypeBadge(c)} ${pauseBadge(c)} ${p?`<span class="badge pending">${esc(p.name)}</span>`:""} ${c.listMode==="label"&&label?`<span class="badge present">Label: ${esc(label.name)}</span>`:""}</div></div><div class="actions">${classCardButtons(c)}</div></div><div class="small muted" style="margin-top:8px">${activeClassStudentIds(c).map(id=>esc(studentById(id).name)).join(", ")||"No students assigned yet."}</div></div>`}).join(""):(db.classes.length?`<div class="card empty">${q?`No classes match "${esc(q)}".`:"No classes match these filters."}</div>`:`<div class="card empty">No classes yet. Create a class and choose its default students.</div>`)
+ const pausedN=db.classes.filter(isPausedNow).length,activeN=db.classes.length-pausedN,mode=classStatusMode;
+ [["csAct","Active ("+activeN+")","active"],["csPau","Paused ("+pausedN+")","paused"],["csAll","All ("+db.classes.length+")","all"]].forEach(([id,l,k])=>{const b=$(id);if(b){b.textContent=l;b.classList.toggle("active",mode===k)}});
+ $("cvAll")?.classList.toggle("active",classViewMode==="all");$("cvDay")?.classList.toggle("active",classViewMode==="day");
+ const byName=(a,b)=>String(a.name||"").localeCompare(String(b.name||""),undefined,{sensitivity:"base",numeric:true});
+ const pool=db.classes.filter(c=>mode==="all"||(mode==="paused"?isPausedNow(c):!isPausedNow(c)));
+ let list=pool.filter(c=>(!q||classSearchText(c).includes(q))&&(!pf||c.programId===pf)&&(!lf||c.defaultLabelId===lf));
+ const bar=$("classDayBar");
+ if(classViewMode==="day"){
+  list=list.filter(c=>classOnDay(c,classDay)).sort((a,b)=>String(a.time||"").localeCompare(String(b.time||""))||byName(a,b));
+  bar.style.display="block";
+  bar.innerHTML=`<div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px">${DAYNAMES.map((n,i)=>`<button class="btn ${i===classDay?"primary":""}" style="flex:1;min-width:54px" onclick="setClassDay(${i})">${n.slice(0,3)}</button>`).join("")}</div>`;
+  $("classCount").innerHTML=`<b>${DAYNAMES[classDay]}</b> · ${list.length} ${list.length===1?"class":"classes"}`;
+ }else{
+  list.sort(byName);bar.style.display="none";bar.innerHTML="";
+  $("classCount").textContent=`Showing ${list.length} of ${pool.length} ${mode==="paused"?"paused ":mode==="active"&&pausedN?"active ":""}${pool.length===1?"class":"classes"}`+(mode==="active"&&pausedN?` · ${pausedN} paused hidden`:"");
+ }
+ const card=c=>{let p=programById(c.programId),label=labelById(c.defaultLabelId);return `<div class="card" style="${isPausedNow(c)?"opacity:.82":""}"><div class="row"><div style="cursor:pointer;flex:1" onclick="classProfile('${c.id}')" title="Open class profile"><h2>${esc(c.name)}</h2><div class="muted">${esc(classScheduleText(c))} · ${activeClassStudentIds(c).length} default students</div><div class="small" style="margin-top:6px">${classTypeBadge(c)} ${pauseBadge(c)} ${p?`<span class="badge pending">${esc(p.name)}</span>`:""} ${c.listMode==="label"&&label?`<span class="badge present">Label: ${esc(label.name)}</span>`:""}</div></div><div class="actions">${classCardButtons(c)}</div></div><div class="small muted" style="margin-top:8px">${activeClassStudentIds(c).map(id=>esc(studentById(id).name)).join(", ")||"No students assigned yet."}</div></div>`};
+ $("classesArea").innerHTML=list.length?list.map(card).join(""):`<div class="card empty">${classViewMode==="day"?"No classes on "+DAYNAMES[classDay]+".":mode==="paused"?"No paused classes.":(q||pf||lf)?"No classes match these filters.":"No classes yet."}</div>`;
 }
 function classProfile(id){
  let c=db.classes.find(x=>x.id===id);if(!c)return;
@@ -1211,7 +1236,7 @@ function populateHistoryDates(preferred=""){
      sessions=recordedSessionsForClass(cid,month);
    }
  }
- d.innerHTML=sessions.length?sessions.map(r=>`<option value="${r.date}">${fmt(r.date)}</option>`).join(""):`<option value="">No recorded sessions</option>`;
+ d.innerHTML=sessions.length?sessions.map(r=>`<option value="${r.date}">${fmt(r.date)} — ${dayName(r.date)}</option>`).join(""):`<option value="">No recorded sessions</option>`;
  if(old&&sessions.some(r=>r.date===old))d.value=old;else if(sessions.length)d.value=sessions[sessions.length-1].date;
 }
 function historyClassChanged(){if(histMode!=="month")populateHistoryDates();renderHistory()}
@@ -1472,12 +1497,16 @@ const PRICING={monthly:"Standard monthly fee",perclass:"Per class",custom:"Custo
 function recById(id){return db.recipients.find(r=>r.id===id)}
 function nextRef(){const n=db.recipients.reduce((m,r)=>Math.max(m,parseInt(String(r.ref||"").replace(/\D/g,""))||0),0)+1;return "ALK-"+String(n).padStart(3,"0")}
 function addRecipient(name,phone){const r={id:uid(),name:name.trim(),phone:(phone||"").trim(),ref:nextRef(),notes:""};db.recipients.push(r);return r}
+const rateKindOf=r=>r.kind==="perlesson"?"perlesson":"monthly";
+function rateOpts(pricing,sel){const k=pricing==="perclass"?"perlesson":"monthly";return db.classRates.filter(r=>rateKindOf(r)===k).map(r=>`<option value="${r.id}" ${sel===r.id?"selected":""}>${esc(r.name)} — ${R(r.amount)}</option>`).join("")}
 function currentRateId(s){
  if(s.fee===""||s.fee===undefined)return "";
- const r=db.classRates.find(x=>x.name===s.rateName&&Number(x.amount)===Number(s.fee));
+ const r=db.classRates.find(x=>x.name===s.rateName&&Number(x.amount)===Number(s.fee)&&rateKindOf(x)===(s.pricing==="perclass"?"perlesson":"monthly"));
  return r?r.id:"custom";
 }
 function payFormToggle(){
+ const pv=$("sPricing").value,rs=$("sRate");
+ if(rs.dataset.p!==pv){const keep=rs.value;rs.innerHTML='<option value="">Choose a rate…</option>'+rateOpts(pv,keep)+'<option value="custom">Custom amount</option>';rs.value=[...rs.options].some(o=>o.value===keep)?keep:"";rs.dataset.p=pv}
  const per=$("sTiming").value==="perclass",custom=$("sRate").value==="custom",mode=$("sDueMode").value;
  $("sCustomBox").style.display=custom?"block":"none";
  $("sDueBox").style.display=per?"none":"block";
@@ -1487,7 +1516,7 @@ function payFormToggle(){
 function payFields(s){
  const sel=db.recipients.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(r=>`<option value="${r.id}" ${s.recipientId===r.id?"selected":""}>${esc(r.name)} (${esc(r.ref)})</option>`).join("");
  const rid=currentRateId(s),pr=s.pricing==="perclass"?"perclass":"monthly",mode=s.dueMode||(s.nextDue?"date":"auto");
- return `<h3 style="margin:16px 0 0">Payment</h3><label style="display:flex;gap:8px;align-items:center;margin-top:10px"><input type="checkbox" id="sSelfPay" onchange="selfPayToggle()" style="width:auto;margin:0" ${selfPays(s)?"checked":""}> This student pays for themself</label><div class="small muted" style="margin-top:2px">Uses the student's own name as the Invoice Recipient, so you don't type it again.</div><label>Invoice Recipient (who pays)</label><select id="sRecipient" ${selfPays(s)?"disabled":""}><option value="">— none yet —</option>${sel}</select><input id="sNewRecipient" placeholder="Or add a new recipient (name)" style="margin-top:6px" ${selfPays(s)?"disabled":""}><input id="sNewRecipientPhone" placeholder="Their WhatsApp number (optional)" style="margin-top:6px"><div class="grid three"><div><label>Payment timing</label><select id="sTiming" onchange="payFormToggle()">${Object.entries(TIMING).map(([k,v])=>`<option value="${k}" ${(s.timing||"advance")===k?"selected":""}>${v}</option>`).join("")}</select></div><div><label>Pricing method</label><select id="sPricing" onchange="payFormToggle()"><option value="monthly" ${pr==="monthly"?"selected":""}>Standard monthly fee</option><option value="perclass" ${pr==="perclass"?"selected":""}>Per class</option></select></div><div><label id="sRateLabel">Monthly rate</label><select id="sRate" onchange="payFormToggle()"><option value="">Choose a rate…</option>${db.classRates.map(r=>`<option value="${r.id}" ${rid===r.id?"selected":""}>${esc(r.name)} — ${R(r.amount)}</option>`).join("")}<option value="custom" ${rid==="custom"?"selected":""}>Custom amount</option></select></div></div><div id="sCustomBox" style="display:none"><div class="grid two"><div><label>Custom amount (R)</label><input id="sFee" type="number" min="0" step="any" value="${rid==="custom"?s.fee:""}"></div><div><label>Reason for this special rate</label><input id="sFeeNote" value="${esc(s.feeNote||"")}" placeholder="Required"></div></div></div><div class="small muted" style="margin-top:4px">Create rates under Payments → Class rates.</div><div id="sDueBox"><label>Next payment due</label><select id="sDueMode" onchange="payFormToggle()"><option value="auto" ${mode==="auto"?"selected":""}>Automatic (start or end of the month)</option><option value="monthafter" ${mode==="monthafter"?"selected":""}>A month after their last payment</option><option value="date" ${mode==="date"?"selected":""}>Choose a date</option></select><div id="sNextDueWrap" style="display:none;margin-top:6px"><input id="sNextDue" type="date" value="${s.nextDue||""}"></div></div>`;
+ return `<h3 style="margin:16px 0 0">Payment</h3><label style="display:flex;gap:8px;align-items:center;margin-top:10px"><input type="checkbox" id="sSelfPay" onchange="selfPayToggle()" style="width:auto;margin:0" ${selfPays(s)?"checked":""}> This student pays for themself</label><div class="small muted" style="margin-top:2px">Uses the student's own name as the Invoice Recipient, so you don't type it again.</div><label>Invoice Recipient (who pays)</label><select id="sRecipient" ${selfPays(s)?"disabled":""}><option value="">— none yet —</option>${sel}</select><input id="sNewRecipient" placeholder="Or add a new recipient (name)" style="margin-top:6px" ${selfPays(s)?"disabled":""}><input id="sNewRecipientPhone" placeholder="Their WhatsApp number (optional)" style="margin-top:6px"><div class="grid three"><div><label>Payment timing</label><select id="sTiming" onchange="payFormToggle()">${Object.entries(TIMING).map(([k,v])=>`<option value="${k}" ${(s.timing||"advance")===k?"selected":""}>${v}</option>`).join("")}</select></div><div><label>Pricing method</label><select id="sPricing" onchange="payFormToggle()"><option value="monthly" ${pr==="monthly"?"selected":""}>Standard monthly fee</option><option value="perclass" ${pr==="perclass"?"selected":""}>Per class</option></select></div><div><label id="sRateLabel">Monthly rate</label><select id="sRate" data-p="${pr}" onchange="payFormToggle()"><option value="">Choose a rate…</option>${rateOpts(pr,rid)}<option value="custom" ${rid==="custom"?"selected":""}>Custom amount</option></select></div></div><div id="sCustomBox" style="display:none"><div class="grid two"><div><label>Custom amount (R)</label><input id="sFee" type="number" min="0" step="any" value="${rid==="custom"?s.fee:""}"></div><div><label>Reason for this special rate</label><input id="sFeeNote" value="${esc(s.feeNote||"")}" placeholder="Required"></div></div></div><div class="small muted" style="margin-top:4px">Create rates under Payments → Class rates.</div><div id="sDueBox"><label>Next payment due</label><select id="sDueMode" onchange="payFormToggle()"><option value="auto" ${mode==="auto"?"selected":""}>Automatic (start or end of the month)</option><option value="monthafter" ${mode==="monthafter"?"selected":""}>A month after their last payment</option><option value="date" ${mode==="date"?"selected":""}>Choose a date</option></select><div id="sNextDueWrap" style="display:none;margin-top:6px"><input id="sNextDue" type="date" value="${s.nextDue||""}"></div></div>`;
 }
 const normName=x=>String(x||"").trim().replace(/\s+/g," ").toLowerCase();
 function selfPays(s){const r=s&&s.recipientId&&recById(s.recipientId);return !!(r&&s.name&&normName(r.name)===normName(s.name))}
@@ -1543,14 +1572,39 @@ function statement(rid,month){
  return {lines,due,perclass,pays,paid,balance:due-paid,urgent,nextDue};
 }
 function payMonth(){return $("payMonth")?.value||monthNow()}
+window._payTab="now";window._paySub="all";
+function setPayTab(t){window._payTab=t;renderPayments()}
+function setPaySub(t){window._paySub=t;renderPayments()}
+function dayName(d){return new Date(d+"T12:00:00").toLocaleDateString(undefined,{weekday:"long"})}
+function rateLabel(s){
+ if(s.fee===""||s.fee===undefined)return "No rate set";
+ return (s.rateName||"Custom")+" · "+R(s.fee)+(s.pricing==="perclass"?" per class":" per month");
+}
+function famKinds(st){const k=new Set();st.lines.filter(l=>l.tracked).forEach(l=>k.add(l.pricing==="perclass"?"perclass":"monthly"));return k}
 function renderPayments(){
  if(!$("payArea"))return;
- const m=payMonth(),rows=db.recipients.map(r=>({r,st:statement(r.id,m)})).filter(x=>x.st.lines.some(l=>l.tracked));
- const owing=rows.filter(x=>x.st.balance>0.005),now=owing.filter(x=>x.st.urgent),soon=owing.filter(x=>!x.st.urgent);
- const sum=a=>a.reduce((t,x)=>t+x.st.balance,0),di=dropIns(m),got=db.payments.filter(p=>p.month===m).reduce((t,p)=>t+Number(p.amount),0)+di.filter(x=>x.a.fee.method!=="Unpaid").reduce((t,x)=>t+x.a.fee.amount,0),diOwe=di.filter(x=>x.a.fee.method==="Unpaid"),rec=[...db.payments.filter(p=>p.month===m).map(p=>({date:p.date,name:(recById(p.recipientId)||{}).name||"Recipient",kind:"Statement payment",method:p.method,amount:Number(p.amount)})),...di.filter(x=>x.a.fee.method!=="Unpaid").map(x=>({date:x.r.date,name:x.name,kind:x.a.temporary?"Drop-in":"Paid at class",method:x.a.fee.method,amount:x.a.fee.amount}))].sort((a,b)=>b.date.localeCompare(a.date));
- const row=x=>`<div class="list-item clickable" onclick="openStatement('${x.r.id}','')"><div class="row"><div><b>${esc(x.r.name)}</b><div class="small muted">${esc(x.r.ref)} · ${x.st.lines.map(l=>esc(l.s.name)).join(", ")}${x.st.nextDue?" · "+dueTag(x.st.nextDue):""}</div></div><div style="text-align:right"><b>${R(x.st.balance)}</b>${x.st.paid?`<div class="small muted">${R(x.st.paid)} paid</div>`:""}</div></div></div>`;
- const noFee=db.students.filter(s=>s.active!==false&&(!s.recipientId||s.fee===""||s.fee===undefined)&&(s.pricing||"monthly")!=="custom").length;
- $("payArea").innerHTML=`<div class="grid three" style="margin-bottom:14px"><div class="card"><div class="stat">${R(sum(owing))}</div><div class="stat-label">Outstanding</div></div><div class="card"><div class="stat">${R(got)}</div><div class="stat-label">Received</div></div><div class="card"><div class="stat">${owing.length}</div><div class="stat-label">Recipients owing</div></div></div>${noFee?`<div class="card small muted" style="margin-bottom:14px">${noFee} active student${noFee>1?"s have":" has"} no recipient or fee yet. Open the student and fill in the Payment section.</div>`:""}${diOwe.length?`<h3>Drop-ins owing</h3><div class="list" style="margin-bottom:18px">${diOwe.map(x=>`<div class="list-item clickable" onclick="editDropIn('${x.r.classId}','${x.r.date}','${x.a.studentId}')"><div class="row"><div><b>${esc(x.name)}</b><div class="small muted">${esc(x.r.className||"Class")} · ${fmt(x.r.date)}</div></div><b>${R(x.a.fee.amount)}</b></div></div>`).join("")}</div>`:""}<h3>Due now</h3><div class="list">${now.length?now.sort((a,b)=>(a.st.nextDue||"9").localeCompare(b.st.nextDue||"9")||a.r.name.localeCompare(b.r.name)).map(row).join(""):'<div class="empty">Nothing due.</div>'}</div><h3 style="margin-top:18px">Due soon (end of month)</h3><div class="list">${soon.length?soon.map(row).join(""):'<div class="empty">Nothing coming up.</div>'}</div><h3 style="margin-top:18px">Paid up</h3><div class="list">${rows.filter(x=>x.st.balance<=0.005).map(row).join("")||'<div class="empty">None yet.</div>'}</div><h3 style="margin-top:18px">Payments received</h3><div class="list">${rec.map(x=>`<div class="list-item"><div class="row"><div><b>${esc(x.name)}</b><div class="small muted">${fmt(x.date)} · ${x.kind} · ${esc(x.method)}</div></div><b>${R(x.amount)}</b></div></div>`).join("")||'<div class="empty">No payments this month.</div>'}</div>`;
+ const m=payMonth(),tab=window._payTab,sub=window._paySub;
+ const fam=db.recipients.map(r=>({r,st:statement(r.id,m)})).filter(x=>x.st.lines.some(l=>l.tracked));
+ const famOk=x=>sub==="all"||(sub!=="dropins"&&famKinds(x.st).has(sub));
+ const di=dropIns(m),diOk=x=>sub==="all"||(sub==="dropins"&&x.a.temporary)||(sub==="perclass"&&!x.a.temporary);
+ const owing=fam.filter(x=>x.st.balance>0.005),settled=fam.filter(x=>x.st.balance<=0.005);
+ const diOwe=di.filter(x=>x.a.fee.method==="Unpaid"),diPaid=di.filter(x=>x.a.fee.method!=="Unpaid");
+ const now=owing.filter(x=>x.st.urgent&&famOk(x)),soon=owing.filter(x=>!x.st.urgent&&famOk(x)),paid=settled.filter(famOk);
+ const nowDi=diOwe.filter(diOk),paidDi=diPaid.filter(diOk);
+ const hist=db.payments.filter(p=>p.month===m&&famOk({st:statement(p.recipientId,m)})).sort((a,b)=>b.date.localeCompare(a.date));
+ const owed=owing.reduce((t,x)=>t+x.st.balance,0)+diOwe.reduce((t,x)=>t+x.a.fee.amount,0);
+ const got=db.payments.filter(p=>p.month===m).reduce((t,p)=>t+Number(p.amount),0)+diPaid.reduce((t,x)=>t+x.a.fee.amount,0);
+ const cls=x=>(db.classes.find(c=>c.id===x.r.classId)||{}).name||x.r.className||"Class";
+ const famRow=x=>`<div class="list-item clickable" onclick="openStatement('${x.r.id}','')"><div class="row"><div style="min-width:0"><b>${esc(x.r.name)}</b><div class="small muted">${esc(x.r.ref)}${x.st.nextDue?" · "+dueTag(x.st.nextDue):""}</div>${x.st.lines.filter(l=>l.tracked).map(l=>`<div class="small" style="margin-top:3px">${esc(l.s.name)} <span class="badge pending">${l.pricing==="perclass"?"Per class":"Monthly"}</span> <span class="muted">${esc(rateLabel(l.s))}</span></div>`).join("")}</div><div style="text-align:right"><b>${R(tab==="paid"?x.st.paid:x.st.balance)}</b>${tab!=="paid"&&x.st.paid?`<div class="small muted">${R(x.st.paid)} paid</div>`:""}</div></div></div>`;
+ const diRow=x=>`<div class="list-item clickable" onclick="editDropIn('${x.r.classId}','${x.r.date}','${x.a.studentId}',true)"><div class="row"><div><b>${esc(x.name)}</b> <span class="badge pending">${x.a.temporary?"Drop-in":"Paid at class"}</span><div class="small muted">${esc(cls(x))} · ${fmt(x.r.date)} · ${esc(x.a.fee.rate||"Custom")}${x.a.fee.method!=="Unpaid"?" · "+esc(x.a.fee.method):""}</div></div><b>${R(x.a.fee.amount)}</b></div></div>`;
+ const histRow=p=>`<div class="list-item"><div class="row"><div><b>${esc((recById(p.recipientId)||{}).name||"Recipient")}</b><div class="small muted">${fmt(p.date)} · ${esc(p.method)}</div></div><b>${R(p.amount)}</b></div></div>`;
+ const sect=(t,a)=>a.length?`<h3 style="margin:14px 0 8px">${t}</h3><div class="list">${a.join("")}</div>`:"";
+ const body=(tab==="now"?sect("Statements",now.sort((a,b)=>(a.st.nextDue||"9").localeCompare(b.st.nextDue||"9")||a.r.name.localeCompare(b.r.name)).map(famRow))+sect("Drop-ins owing",nowDi.map(diRow))
+  :tab==="soon"?sect("Statements",soon.map(famRow))
+  :sect("Settled statements",paid.map(famRow))+sect("Paid at class",paidDi.map(diRow))+sect("Payment history",hist.map(histRow)))||`<div class="card empty">${tab==="now"?"Nothing due.":tab==="soon"?"Nothing coming up.":"Nothing here yet."}</div>`;
+ const noFee=db.students.filter(s=>s.active!==false&&(!s.recipientId||s.fee===""||s.fee===undefined)).length;
+ const seg=(k,l,n)=>`<button class="${tab===k?"active":""}" style="flex:1" onclick="setPayTab('${k}')">${l} (${n})</button>`;
+ $("payArea").innerHTML=`<div class="grid three" style="margin-bottom:14px"><div class="card"><div class="stat">${R(owed)}</div><div class="stat-label">Outstanding</div></div><div class="card"><div class="stat">${R(got)}</div><div class="stat-label">Received</div></div><div class="card"><div class="stat">${owing.length+diOwe.length}</div><div class="stat-label">Owing</div></div></div>${noFee?`<div class="card small muted" style="margin-bottom:14px">${noFee} active student${noFee>1?"s have":" has"} no recipient or rate yet. Open the student's Payments tab to set it up.</div>`:""}<div class="seg-group" style="display:flex;margin-bottom:10px">${seg("now","Due now",now.length+nowDi.length)}${seg("soon","Due soon",soon.length)}${seg("paid","Paid up",paid.length+paidDi.length)}</div><div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px">${[["all","All"],["monthly","Monthly"],["perclass","Per class"],["dropins","Drop-ins"]].map(([k,l])=>`<button class="btn ${sub===k?"primary":""}" onclick="setPaySub('${k}')">${l}</button>`).join("")}</div>${body}`;
 }
 function openStatement(rid,from){if(from!==undefined)window._stmtFrom=from;
  const r=recById(rid),m=payMonth(),st=statement(rid,m);if(!r)return;
@@ -1609,8 +1663,8 @@ function dropInRead(){
  const sel=$("dRate"),rate=sel.value?db.dropRates.find(x=>x.id===sel.value)?.name:"Custom";
  return {amount:amt,method:$("dMethod").value,rate:rate||"Custom"};
 }
-function editDropIn(classId,date,sid){
- const rr=getRecord(classId,date),a=rr.records.find(x=>x.studentId===sid);if(!a||rr.status==="completed")return;
+function editDropIn(classId,date,sid,force){
+ const rr=getRecord(classId,date),a=rr.records.find(x=>x.studentId===sid);if(!a||(rr.status==="completed"&&!force))return;
  const s=db.students.find(x=>x.id===sid);
  openModal(`<h2>Payment at class</h2><div class="muted">${esc(s?s.name:a.name||"Student")} · ${fmt(date)}</div>${dropInFields(a,s&&s.timing==="perclass"&&s.fee!==""?s.fee:undefined)}<div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button>${a.fee?`<button class="btn danger" onclick="saveDropIn('${classId}','${date}','${sid}',true)">Clear</button>`:""}<button class="btn primary" onclick="saveDropIn('${classId}','${date}','${sid}')">Save</button></div>`);
 }
@@ -1632,13 +1686,13 @@ function openRates(kind){
 }
 function rateDraw(){
  $("rateRows").innerHTML=window._rates.map((r,i)=>window._rateOpen===i
-  ?`<div data-rate style="border:2px solid #2563eb;border-radius:12px;padding:12px;margin-top:8px"><input id="rtN" value="${esc(r.name)}" placeholder="Name, e.g. Standard"><input id="rtA" type="number" min="0" step="any" value="${amtv(r.amount)}" placeholder="Rate (R)" style="margin-top:8px"><button class="btn danger" style="margin-top:8px" onclick="rateRemove(${i})">Delete rate</button></div>`
-  :`<div data-rate onclick="rateOpen(${i})" style="border:1px solid #d1d5db;border-radius:12px;padding:12px 14px;margin-top:8px;display:flex;justify-content:space-between;gap:10px;cursor:pointer"><span>${esc(r.name)||"New rate"}</span><b>${amtv(r.amount)===""?"R —":R(r.amount)}</b></div>`).join("")||'<div class="empty">No rates yet.</div>';
+  ?`<div data-rate style="border:2px solid #2563eb;border-radius:12px;padding:12px;margin-top:8px"><input id="rtN" value="${esc(r.name)}" placeholder="Name, e.g. Standard"><input id="rtA" type="number" min="0" step="any" value="${amtv(r.amount)}" placeholder="Rate (R)" style="margin-top:8px">${window._rateKind==="classRates"?`<select id="rtK" style="margin-top:8px"><option value="monthly" ${(r.kind||"monthly")==="monthly"?"selected":""}>Monthly rate</option><option value="perlesson" ${r.kind==="perlesson"?"selected":""}>Per lesson rate</option></select>`:""}<button class="btn danger" style="margin-top:8px" onclick="rateRemove(${i})">Delete rate</button></div>`
+  :`<div data-rate onclick="rateOpen(${i})" style="border:1px solid #d1d5db;border-radius:12px;padding:12px 14px;margin-top:8px;display:flex;justify-content:space-between;gap:10px;cursor:pointer"><span>${esc(r.name)||"New rate"}</span><b>${amtv(r.amount)===""?"R —":R(r.amount)}${window._rateKind==="classRates"?` <span class="small muted" style="font-weight:400">· ${r.kind==="perlesson"?"per lesson":"monthly"}</span>`:""}</b></div>`).join("")||'<div class="empty">No rates yet.</div>';
 }
-function rateSync(){const i=window._rateOpen;if(i>=0&&$("rtN")){window._rates[i].name=$("rtN").value.trim();window._rates[i].amount=parseFloat($("rtA").value)}}
+function rateSync(){const i=window._rateOpen;if(i>=0&&$("rtN")){window._rates[i].name=$("rtN").value.trim();window._rates[i].amount=parseFloat($("rtA").value);if($("rtK"))window._rates[i].kind=$("rtK").value}}
 function rateOpen(i){rateSync();window._rateOpen=i;rateDraw()}
 function rateOutside(e){if(window._rateOpen>=0&&!e.target.closest("[data-rate],button"))rateOpen(-1)}
-function rateAdd(){rateSync();window._rates.push({id:uid(),name:"",amount:""});window._rateOpen=window._rates.length-1;rateDraw()}
+function rateAdd(){rateSync();window._rates.push({id:uid(),name:"",amount:"",kind:"monthly"});window._rateOpen=window._rates.length-1;rateDraw()}
 function rateRemove(i){window._rates.splice(i,1);window._rateOpen=-1;rateDraw()}
 function rateSave(){
  rateSync();const ok=window._rates.filter(r=>r.name||amtv(r.amount)!=="");
