@@ -623,9 +623,9 @@ function enhanceSearchInputs(root){
    wrap.appendChild(b);sync();
  });
 }
-function openModal(html){$("modalBody").innerHTML=html;enhanceSearchInputs($("modalBody"));$("modal").showModal()}
+function openModal(html){window._modalLock=false;$("modalBody").innerHTML=html;enhanceSearchInputs($("modalBody"));$("modal").showModal()}
 function closeModal(){$("modal").close()}
-$("modal").addEventListener("click",e=>{if(e.target===$("modal"))closeModal()})
+$("modal").addEventListener("click",e=>{if(e.target===$("modal")&&!window._modalLock)closeModal()});$("modal").addEventListener("cancel",e=>{if(window._modalLock)e.preventDefault()});$("modal").addEventListener("close",()=>{window._modalLock=false})
 
 document.querySelectorAll(".nav button").forEach(b=>b.onclick=()=>showView(b.dataset.view));
 function showView(v){document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));$(v).classList.add("active");document.querySelectorAll(".nav button").forEach(x=>x.classList.toggle("active",x.dataset.view===v));refresh(v)}
@@ -1163,7 +1163,9 @@ function setClassDay(i){classDay=i;renderClasses()}
 function classOnDay(c,i){return classType(c)!=="once"&&classDaysList(c).some(d=>String(d).toLowerCase().startsWith(DAYNAMES[i].slice(0,3).toLowerCase()))}
 function renderClasses(){
  const q=($("classSearch")?.value||"").toLowerCase().trim(),pf=$("classProgramFilter")?.value||"",lf=$("classLabelFilter")?.value||"";
+ if(classStatusMode==="paused")classViewMode="all";
  const pausedN=db.classes.filter(isPausedNow).length,activeN=db.classes.length-pausedN,mode=classStatusMode;
+ {const bd=$("cvDay");if(bd){bd.disabled=mode==="paused";bd.style.opacity=mode==="paused"?".45":""}}
  [["csAct","Active ("+activeN+")","active"],["csPau","Paused ("+pausedN+")","paused"],["csAll","All ("+db.classes.length+")","all"]].forEach(([id,l,k])=>{const b=$(id);if(b){b.textContent=l;b.classList.toggle("active",mode===k)}});
  $("cvAll")?.classList.toggle("active",classViewMode==="all");$("cvDay")?.classList.toggle("active",classViewMode==="day");
  const byName=(a,b)=>String(a.name||"").localeCompare(String(b.name||""),undefined,{sensitivity:"base",numeric:true});
@@ -1606,10 +1608,13 @@ function renderPayments(){
  const seg=(k,l,n)=>`<button class="${tab===k?"active":""}" style="flex:1" onclick="setPayTab('${k}')">${l} (${n})</button>`;
  $("payArea").innerHTML=`<div class="grid three" style="margin-bottom:14px"><div class="card"><div class="stat">${R(owed)}</div><div class="stat-label">Outstanding</div></div><div class="card"><div class="stat">${R(got)}</div><div class="stat-label">Received</div></div><div class="card"><div class="stat">${owing.length+diOwe.length}</div><div class="stat-label">Owing</div></div></div>${noFee?`<div class="card small muted" style="margin-bottom:14px">${noFee} active student${noFee>1?"s have":" has"} no recipient or rate yet. Open the student's Payments tab to set it up.</div>`:""}<div class="seg-group" style="display:flex;margin-bottom:10px">${seg("now","Due now",now.length+nowDi.length)}${seg("soon","Due soon",soon.length)}${seg("paid","Paid up",paid.length+paidDi.length)}</div><div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px">${[["all","All"],["monthly","Monthly"],["perclass","Per class"],["dropins","Drop-ins"]].map(([k,l])=>`<button class="btn ${sub===k?"primary":""}" onclick="setPaySub('${k}')">${l}</button>`).join("")}</div>${body}`;
 }
-function openStatement(rid,from){if(from!==undefined)window._stmtFrom=from;
+function openStatement(rid,from){
+ if(from!==undefined)window._stmtFrom=from;
  const r=recById(rid),m=payMonth(),st=statement(rid,m);if(!r)return;
  const lab=new Date(m+"-15T12:00:00").toLocaleDateString(undefined,{month:"long",year:"numeric"});
- openModal(`${window._stmtFrom?`<button class="btn" style="margin-bottom:10px" onclick="studentProfile('${window._stmtFrom}','payments')">← Student profile</button>`:""}<div class="row"><div><h2>${esc(r.name)}</h2><div class="muted">Reference <b>${esc(r.ref)}</b> · ${esc(lab)}</div></div><button class="btn" onclick="editRecipient('${rid}')">Edit</button></div><table style="margin-top:12px"><thead><tr><th>Student</th><th>Arrangement</th><th>Attended</th><th style="text-align:right">Amount</th></tr></thead><tbody>${st.lines.map(l=>`<tr><td>${esc(l.s.name)}${l.s.feeNote?`<div class="small muted">${esc(l.s.feeNote)}</div>`:""}</td><td class="small">${TIMING[l.timing]}<br>${PRICING[l.pricing]}${l.pricing==="perclass"?" @ "+R(l.s.fee):""}</td><td class="small">${l.att} present${l.abs?`, ${l.abs} absent`:""}${l.can?`, ${l.can} cancelled`:""}</td><td style="text-align:right">${R(l.amount)}${l.tracked?"":'<div class="small muted">paid per class</div>'}</td></tr>`).join("")||'<tr><td colspan="4" class="muted">No active students linked.</td></tr>'}</tbody></table><div class="grid three" style="margin:14px 0"><div class="card"><div class="stat">${R(st.due)}</div><div class="stat-label">Due</div></div><div class="card"><div class="stat">${R(st.paid)}</div><div class="stat-label">Paid</div></div><div class="card"><div class="stat">${R(st.balance)}</div><div class="stat-label">Balance</div></div></div>${st.pays.length?`<h3>Payments</h3>${st.pays.map(p=>`<div class="list-item"><div class="row"><div>${fmt(p.date)} · ${esc(p.method)}${p.reason?`<div class="small muted">${esc(p.reason)}</div>`:""}</div><div><b>${R(p.amount)}</b> <button class="btn danger" onclick="deletePayment('${p.id}','${rid}')">✕</button></div></div></div>`).join("")}`:""}<div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="whatsappReminder('${rid}')">WhatsApp reminder</button><button class="btn primary" onclick="openPayment('${rid}')">Record payment</button><button class="btn" onclick="closeModal()">Close</button></div>`);
+ const paidTxt=l=>!l.tracked?"At class":st.balance<=0.005?"Yes":st.paid>0?"Partly":"No";
+ const att=st.lines.map(l=>{const a=studentMonthStats(l.s.id,m);return `<div style="margin-top:14px"><h3>${esc(l.s.name)} — attendance for ${esc(lab)}</h3><div class="small muted" style="margin:2px 0 8px">Attended <b>${a.attended}</b> · Missed <b>${a.absent}</b></div>${a.rows.length?`<table><thead><tr><th>Date</th><th>Class</th><th>Result</th></tr></thead><tbody>${a.rows.map(x=>`<tr><td>${fmt(x.date)}</td><td>${esc(x.className)}</td><td><span class="badge ${x.status==="present"?"present":x.status==="absent"?"absent":"pending"}">${x.status||"Not marked"}</span>${x.reason?` <span class="small muted">— ${esc(x.reason)}</span>`:""}</td></tr>`).join("")}</tbody></table>`:`<div class="empty">No attendance recorded for ${esc(lab)}.</div>`}</div>`}).join("");
+ openModal(`${window._stmtFrom?`<button class="btn" style="margin-bottom:10px" onclick="studentProfile('${window._stmtFrom}','payments')">← Student profile</button>`:""}<div class="row"><div><h2>${esc(r.name)}</h2><div class="muted">Reference <b>${esc(r.ref)}</b> · ${esc(lab)}</div></div><button class="btn" onclick="editRecipient('${rid}')">Edit</button></div><table style="margin-top:12px"><thead><tr><th>Student</th><th>Arrangement</th><th>Paid</th><th style="text-align:right">Amount</th></tr></thead><tbody>${st.lines.map(l=>`<tr><td>${esc(l.s.name)}${l.s.feeNote?`<div class="small muted">${esc(l.s.feeNote)}</div>`:""}</td><td class="small">${TIMING[l.timing]}<br>${esc(rateLabel(l.s))}</td><td>${paidTxt(l)}</td><td style="text-align:right">${R(l.amount)}${l.tracked?"":'<div class="small muted">paid per class</div>'}</td></tr>`).join("")||'<tr><td colspan="4" class="muted">No active students linked.</td></tr>'}</tbody></table><div class="small" style="margin-top:8px;text-align:right">Total due <b>${R(st.due)}</b> · Balance <b>${R(st.balance)}</b></div>${att}${st.pays.length?`<h3 style="margin-top:16px">Payments</h3>${st.pays.map(p=>`<div class="list-item"><div class="row"><div>${fmt(p.date)} · ${esc(p.method)}${p.reason?`<div class="small muted">${esc(p.reason)}</div>`:""}</div><div><b>${R(p.amount)}</b> <button class="btn danger" onclick="deletePayment('${p.id}','${rid}')">✕</button></div></div></div>`).join("")}`:""}<div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="whatsappReminder('${rid}')">WhatsApp reminder</button><button class="btn primary" onclick="openPayment('${rid}')">Record payment</button><button class="btn" onclick="closeModal()">Close</button></div>`);
 }
 function openPayment(rid){
  const r=recById(rid),m=payMonth(),st=statement(rid,m);
@@ -1680,26 +1685,54 @@ function payBtn(a,classId,date,s,off){
 }
 const amtv=v=>(v===""||v===undefined||v===null||isNaN(v))?"":v;
 function openRates(kind){
- window._rateKind=kind||"dropRates";window._rates=db[window._rateKind].map(r=>({...r}));window._rateOpen=-1;
- openModal(`<div onclick="rateOutside(event)"><h2>${window._rateKind==="classRates"?"Class rates":"Drop-in rates"}</h2><div class="muted small">${window._rateKind==="classRates"?"The monthly or per-class rates you charge regular students.":"The rates you charge temporary students."} Tap a rate to edit it.</div><div id="rateRows" style="margin-top:10px"></div><button class="btn" style="margin-top:10px" onclick="rateAdd()">+ Add rate</button><div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="rateSave()">Save</button></div></div>`);
- rateDraw();
+ window._rateKind=kind||"dropRates";window._rates=db[window._rateKind].map(r=>({...r}));window._rateOpen=-1;window._rateSnap=null;
+ openModal(`<div onclick="rateOutside(event)"><h2>${window._rateKind==="classRates"?"Class rates":"Drop-in rates"}</h2><div class="muted small">${window._rateKind==="classRates"?"The monthly or per-class rates you charge regular students.":"The rates you charge temporary students."} Tap a rate to edit it. Nothing is kept until you tap Save.</div><div id="rateRows" style="margin-top:10px;height:min(300px,42vh);overflow-y:auto;padding:2px"></div><button class="btn" style="margin-top:10px" onclick="rateAdd()">+ Add rate</button><div class="actions" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Close</button><button class="btn primary" onclick="rateSave()">Save</button></div></div>`);
+ window._modalLock=true;rateDraw();
 }
+function rateInputs(){return $("rtN")?{name:$("rtN").value.trim(),amount:$("rtA").value,kind:$("rtK")?$("rtK").value:undefined}:null}
+function rateValid(){const v=rateInputs();return !!(v&&v.name&&v.amount!==""&&!isNaN(parseFloat(v.amount)))}
+function rateDirty(){
+ const i=window._rateOpen,v=rateInputs();if(i<0||!v)return false;
+ const r=window._rates[i];if(r._new)return !!(v.name||v.amount!=="");
+ const sn=window._rateSnap;return v.name!==sn.name||String(v.amount)!==String(amtv(sn.amount))||(v.kind!==undefined&&v.kind!==sn.kind);
+}
+function rateUpdateDone(){const b=$("rateDone");if(b)b.disabled=!(rateDirty()&&rateValid())}
 function rateDraw(){
  $("rateRows").innerHTML=window._rates.map((r,i)=>window._rateOpen===i
-  ?`<div data-rate style="border:2px solid #2563eb;border-radius:12px;padding:12px;margin-top:8px"><input id="rtN" value="${esc(r.name)}" placeholder="Name, e.g. Standard"><input id="rtA" type="number" min="0" step="any" value="${amtv(r.amount)}" placeholder="Rate (R)" style="margin-top:8px">${window._rateKind==="classRates"?`<select id="rtK" style="margin-top:8px"><option value="monthly" ${(r.kind||"monthly")==="monthly"?"selected":""}>Monthly rate</option><option value="perlesson" ${r.kind==="perlesson"?"selected":""}>Per lesson rate</option></select>`:""}<button class="btn danger" style="margin-top:8px" onclick="rateRemove(${i})">Delete rate</button></div>`
+  ?`<div data-rate style="border:2px solid #2563eb;border-radius:12px;padding:12px;margin-top:8px"><input id="rtN" value="${esc(r.name)}" placeholder="Name, e.g. Standard" oninput="rateUpdateDone()"><input id="rtA" type="number" min="0" step="any" value="${amtv(r.amount)}" placeholder="Rate (R)" style="margin-top:8px" oninput="rateUpdateDone()">${window._rateKind==="classRates"?`<select id="rtK" style="margin-top:8px" onchange="rateUpdateDone()"><option value="monthly" ${(r.kind||"monthly")==="monthly"?"selected":""}>Monthly rate</option><option value="perlesson" ${r.kind==="perlesson"?"selected":""}>Per lesson rate</option></select>`:""}<div class="actions" style="margin-top:8px"><button class="btn danger" onclick="rateRemove(${i})">Delete rate</button><button id="rateDone" class="btn primary" disabled onclick="rateDone()">Done</button></div></div>`
   :`<div data-rate onclick="rateOpen(${i})" style="border:1px solid #d1d5db;border-radius:12px;padding:12px 14px;margin-top:8px;display:flex;justify-content:space-between;gap:10px;cursor:pointer"><span>${esc(r.name)||"New rate"}</span><b>${amtv(r.amount)===""?"R —":R(r.amount)}${window._rateKind==="classRates"?` <span class="small muted" style="font-weight:400">· ${r.kind==="perlesson"?"per lesson":"monthly"}</span>`:""}</b></div>`).join("")||'<div class="empty">No rates yet.</div>';
+ const o=$("rateRows").querySelector("#rtN");if(o)o.closest("[data-rate]").scrollIntoView?.({block:"nearest"});
 }
-function rateSync(){const i=window._rateOpen;if(i>=0&&$("rtN")){window._rates[i].name=$("rtN").value.trim();window._rates[i].amount=parseFloat($("rtA").value);if($("rtK"))window._rates[i].kind=$("rtK").value}}
-function rateOpen(i){rateSync();window._rateOpen=i;rateDraw()}
-function rateOutside(e){if(window._rateOpen>=0&&!e.target.closest("[data-rate],button"))rateOpen(-1)}
-function rateAdd(){rateSync();window._rates.push({id:uid(),name:"",amount:"",kind:"monthly"});window._rateOpen=window._rates.length-1;rateDraw()}
+function rateCloseOpen(){
+ const i=window._rateOpen;if(i<0)return true;
+ if(rateDirty())return false;
+ if(window._rates[i]._new)window._rates.splice(i,1);
+ window._rateOpen=-1;return true;
+}
+function rateOpen(i){
+ const cur=window._rateOpen;if(cur===i)return;
+ if(cur>=0&&!rateCloseOpen())return;
+ const r=window._rates[i];window._rateOpen=i;window._rateSnap={name:r.name,amount:r.amount,kind:r.kind||"monthly"};rateDraw();
+}
+function rateOutside(e){if(window._rateOpen>=0&&!e.target.closest("[data-rate],button,input,select")&&rateCloseOpen())rateDraw()}
+function rateAdd(){
+ if(window._rateOpen>=0&&!rateCloseOpen())return;
+ window._rates.push({id:uid(),name:"",amount:"",kind:"monthly",_new:true});window._rateOpen=window._rates.length-1;window._rateSnap=null;rateDraw();
+}
+function rateDone(){
+ const i=window._rateOpen;if(i<0||!rateValid())return;
+ const v=rateInputs(),r=window._rates[i];r.name=v.name;r.amount=parseFloat(v.amount);if(v.kind)r.kind=v.kind;delete r._new;
+ window._rateOpen=-1;rateDraw();
+}
 function rateRemove(i){window._rates.splice(i,1);window._rateOpen=-1;rateDraw()}
 function rateSave(){
- rateSync();const ok=window._rates.filter(r=>r.name||amtv(r.amount)!=="");
- if(ok.some(r=>!r.name||amtv(r.amount)==="")){alert("Every rate needs a name and an amount.");return}
+ if(window._rateOpen>=0){
+  if(rateDirty()){if(!rateValid()){alert("Please enter both a name and an amount for the rate you are editing, then tap Done (or Delete rate).");return}rateDone()}
+  else rateCloseOpen();
+ }
+ const ok=window._rates.filter(r=>r.name&&amtv(r.amount)!=="").map(({_new,...r})=>r);
  db[window._rateKind]=ok;save();closeModal();toast("Rates saved");
 }
-
 function inactiveToggle(){$("sInactiveBox").style.display=$("sActive").value==="false"?"block":"none"}
 function studentFormInit(){if($("sTiming"))payFormToggle()}
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
